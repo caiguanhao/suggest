@@ -1,0 +1,59 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "U68mPuWsWp6c5XTevgNUP8orU/8=",
+			"path": "github.com/PuerkitoBio/goquery",
+			"revision": "77cbaef46a3af185a3afb87f88a366f3dee2a904",
+			"revisionTime": "2016-06-15T13:48:05Z"
+		},
+		{
+			"checksumSHA1": "YKJEHQmesxr6ExwGE4WZrpQsq4s=",
+			"path": "github.com/andybalholm/cascadia",
+			"revision": "3ad29d1ad1c4f2023e355603324348cf1f4b2d48",
+			"revisionTime": "2015-07-30T17:44:59Z"
+		},
+		{
+			"checksumSHA1": "DEyYo5hRooqdVcHuxNQ7HPWbAeU=",
+			"path": "github.com/caiguanhao/gopinyin",
+			"revision": "288819c6cd6536e59e7ccee4916027324c4da5f0",
+			"revisionTime": "2016-06-19T12:32:28Z"
+		},
+		{
+			"checksumSHA1": "Mx8IBV2rG4sU/i2vSN7+DowzkcI=",
+			"path": "github.com/caiguanhao/gotogether",
+			"revision": "bbadfa2c7eb94f0f85d6d03e9382cdfef9f2af01",
+			"revisionTime": "2016-06-16T09:50:52Z"
+		},
+		{
+			"checksumSHA1": "a7kWDYtHLZAcXBJl2/r7ohA1gK8=",
+			"path": "github.com/caiguanhao/sogoudict",
+			"revision": "152d3c4699252c71c549ae28d25193b5d3c50192",
+			"revisionTime": "2016-06-18T03:11:44Z"
+		},
+		{
+			"checksumSHA1": "r0TNua5yJKMA8eHlGP89RwrKD2U=",
+			"path": "github.com/lib/pq",
+			"revision": "55196ec83d60d789e27b2627549bf00974a70084",
+			"revisionTime": "2016-03-28T15:34:59Z"
+		},
+		{
+			"checksumSHA1": "xppHi82MLqVx1eyQmbhTesAEjx8=",
+			"path": "github.com/lib/pq/oid",
+			"revision": "55196ec83d60d789e27b2627549bf00974a70084",
+			"revisionTime": "2016-03-28T15:34:59Z"
+		},
+		{
+			"checksumSHA1": "F6ho9Ij9gLwBml6wNfkGgaLLVRg=",
+			"path": "github.com/urfave/cli",
+			"revision": "45677612ec27e6a286bdd96c77d32233e47316f7",
+			"revisionTime": "2016-06-21T18:30:11Z"
+		},
+		{
+			"path": "golang.org/x/net/html",
+			"revision": ""
+		}
+	],
+	"rootPath": "github.com/caiguanhao/suggest"
+}
