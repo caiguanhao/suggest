@@ -40,3 +40,28 @@ CREATE SEQUENCE dicts_id_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE
 ALTER SEQUENCE dicts_id_seq OWNED BY dicts.id;
 ALTER TABLE ONLY dicts ADD CONSTRAINT dicts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY dicts ALTER COLUMN id SET DEFAULT nextval('dicts_id_seq'::regclass);
+
+CREATE FUNCTION SEQUENCED_ARRAY_CONTAINS(character varying[], VARIADIC character varying[])
+RETURNS integer AS $$
+DECLARE
+	i integer;
+	start integer;
+BEGIN
+	FOR i IN 1 .. array_upper($1, 1) - array_length($2, 1) + 1 LOOP
+		IF $1[i] = ANY($2[1]::character varying[]) THEN
+			start := i;
+			EXIT;
+		END IF;
+	END LOOP;
+	IF start IS NULL THEN
+		RETURN -1;
+	ELSE
+		FOR i IN 2 .. array_upper($2, 1) LOOP
+			IF NOT ($1[start + i - 1] = ANY($2[i]::character varying[])) THEN
+				RETURN -1;
+			END IF;
+		END LOOP;
+		RETURN 10000 - (start * 11) - (array_length($1, 1) - start - 1) * 10;
+	END IF;
+END;
+$$ LANGUAGE plpgsql;

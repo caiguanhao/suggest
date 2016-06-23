@@ -20,9 +20,9 @@ func (pys Pinyins) Expand() (out Pinyins) {
 func (pys Pinyins) SQL(column string) (out string) {
 	var ret []string
 	for _, py := range pys {
-		ret = append(ret, fmt.Sprintf("%s && '{%s}'", column, py))
+		ret = append(ret, fmt.Sprintf("'{%s}'", py))
 	}
-	out = strings.Join(ret, " AND ")
+	out = fmt.Sprintf("SEQUENCED_ARRAY_CONTAINS(%s, %s)", column, strings.Join(ret, ", "))
 	return
 }
 
