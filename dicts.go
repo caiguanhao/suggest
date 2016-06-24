@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/caiguanhao/sogoudict"
 )
@@ -15,6 +16,9 @@ import (
 func (suggest Suggest) GetDict(ID int) (err error) {
 	var req *http.Request
 	url := fmt.Sprintf("http://download.pinyin.sogou.com/dict/download_cell.php?id=%d&name=", ID)
+
+	fmt.Fprintf(os.Stderr, "downloading dict %d from %s\n", ID, url)
+
 	req, err = http.NewRequest("GET", url, nil)
 	if err != nil {
 		return
@@ -49,12 +53,17 @@ func (suggest Suggest) GetDict(ID int) (err error) {
 		return true
 	}, func(stmt *sql.Stmt) (err error) {
 		for _, item := range dict.Items {
-			_, err = stmt.Exec(StringArray(item.Pinyin), item.Text, ID, 0)
+			_, err = stmt.Exec(StringArray(item.Pinyin), strings.Join(item.Abbr, ""), item.Text, ID, 0)
 			if err != nil {
 				return
 			}
 		}
 		return
-	}, "data", "pinyin", "word", "sogou_id", "weight")
+	}, "data", "pinyin", "abbr", "word", "sogou_id", "weight")
+
+	if err == nil {
+		fmt.Fprintf(os.Stderr, "%d items added to database\n", len(dict.Items))
+	}
+
 	return
 }

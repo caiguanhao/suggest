@@ -22,8 +22,7 @@ func main() {
 			Name:  "get-lists",
 			Usage: "Get dictionary links of all pages of each category.",
 			Action: func(c *cli.Context) error {
-				s.GetLists()
-				return nil
+				return s.GetLists()
 			},
 		},
 		{
@@ -34,8 +33,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				s.GetDict(dict)
-				return nil
+				return s.GetDict(dict)
 			},
 		},
 		{
@@ -57,5 +55,8 @@ func main() {
 			},
 		},
 	}
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

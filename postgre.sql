@@ -5,6 +5,7 @@ CREATE DATABASE suggest;
 CREATE TABLE data (
   id       integer NOT NULL,
   pinyin   character varying[] DEFAULT '{}'::character varying[],
+  abbr     character varying(255) NOT NULL,
   word     character varying(255) NOT NULL,
   sogou_id integer NOT NULL,
   weight   integer DEFAULT 0 NOT NULL
