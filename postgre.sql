@@ -42,27 +42,32 @@ ALTER SEQUENCE dicts_id_seq OWNED BY dicts.id;
 ALTER TABLE ONLY dicts ADD CONSTRAINT dicts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY dicts ALTER COLUMN id SET DEFAULT nextval('dicts_id_seq'::regclass);
 
-CREATE FUNCTION SEQUENCED_ARRAY_CONTAINS(character varying[], VARIADIC character varying[])
+CREATE FUNCTION SCORE(character varying, character varying)
 RETURNS integer AS $$
+BEGIN
+	RETURN 10000 - ((position($2 in $1) - 1) * 100) - (length($1) - length($2)) * 10;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION CONTAINS(character varying[], character varying[])
+RETURNS boolean AS $$
 DECLARE
+	b boolean;
 	i integer;
-	start integer;
+	j integer;
 BEGIN
 	FOR i IN 1 .. array_upper($1, 1) - array_length($2, 1) + 1 LOOP
-		IF $1[i] = ANY($2[1]::character varying[]) THEN
-			start := i;
-			EXIT;
-		END IF;
-	END LOOP;
-	IF start IS NULL THEN
-		RETURN -1;
-	ELSE
-		FOR i IN 2 .. array_upper($2, 1) LOOP
-			IF NOT ($1[start + i - 1] = ANY($2[i]::character varying[])) THEN
-				RETURN -1;
+		b := true;
+		FOR j IN 1 .. array_upper($2, 1) LOOP
+			IF NOT (position($2[j] in $1[i + j - 1]) = 1) THEN
+				b := false;
+				EXIT;
 			END IF;
 		END LOOP;
-		RETURN 10000 - (start * 11) - (array_length($1, 1) - start - 1) * 10;
-	END IF;
+		IF b = true THEN
+			RETURN true;
+		END IF;
+	END LOOP;
+	RETURN false;
 END;
 $$ LANGUAGE plpgsql;

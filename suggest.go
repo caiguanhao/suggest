@@ -2,8 +2,6 @@ package suggest
 
 import (
 	"database/sql"
-	"database/sql/driver"
-	"encoding/json"
 	"strings"
 
 	"github.com/lib/pq"
@@ -11,20 +9,6 @@ import (
 
 type Suggest struct {
 	DataSource string
-}
-
-type StringArray []string
-
-func (arr StringArray) Value() (value driver.Value, err error) {
-	var str []byte
-	str, err = json.Marshal(arr)
-	if err != nil {
-		return
-	}
-	str[0] = '{'
-	str[len(str)-1] = '}'
-	value = driver.Value(string(str))
-	return
 }
 
 // Prepare a buck insertion for lots of data. If check returns false, then bulk insertion won't be executed.
@@ -78,7 +62,7 @@ func (suggest Suggest) BulkInsert(check func(_ *sql.DB) bool, bulk func(_ *sql.S
 }
 
 // Execute an SQL query statement.
-func (suggest Suggest) Query(sqlQuery string) (rets []interface{}, err error) {
+func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []interface{}, err error) {
 	var db *sql.DB
 	db, err = sql.Open("postgres", suggest.DataSource)
 	if err != nil {
@@ -86,7 +70,7 @@ func (suggest Suggest) Query(sqlQuery string) (rets []interface{}, err error) {
 	}
 	defer db.Close()
 	var rows *sql.Rows
-	rows, err = db.Query(sqlQuery)
+	rows, err = db.Query(sqlQuery, args...)
 	if err != nil {
 		return
 	}
