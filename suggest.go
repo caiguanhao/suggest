@@ -61,6 +61,41 @@ func (suggest Suggest) BulkInsert(check func(_ *sql.DB) bool, bulk func(_ *sql.S
 	return
 }
 
+func (suggest Suggest) BulkExec(statement string, bulk func(_ *sql.Stmt) error) (err error) {
+	var db *sql.DB
+	db, err = sql.Open("postgres", suggest.DataSource)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	var tx *sql.Tx
+	tx, err = db.Begin()
+	if err != nil {
+		return
+	}
+
+	var stmt *sql.Stmt
+	stmt, err = tx.Prepare(statement)
+	if err != nil {
+		return
+	}
+
+	if err = bulk(stmt); err != nil {
+		return
+	}
+
+	if err = stmt.Close(); err != nil {
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		return
+	}
+
+	return
+}
+
 // Execute an SQL query statement.
 func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []interface{}, err error) {
 	var db *sql.DB

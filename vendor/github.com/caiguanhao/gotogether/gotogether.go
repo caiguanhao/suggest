@@ -31,6 +31,16 @@ func (e Enumerable) EachWithIndex(f func(item interface{}, i int)) {
 	wg.Wait()
 }
 
+// Return new enumberable containing all elements for which the filter function returns true.
+func (e Enumerable) Filter(f func(item interface{}) bool) (ret Enumerable) {
+	for _, item := range e {
+		if f(item) {
+			ret = append(ret, item)
+		}
+	}
+	return
+}
+
 // Make Parallel{} for each element that can be Run() later.
 func (e Enumerable) Parallel(f func(item interface{})) (p Parallel) {
 	for _, item := range e {

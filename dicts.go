@@ -54,13 +54,13 @@ func (suggest Suggest) GetDict(ID int) (err error) {
 		return true
 	}, func(stmt *sql.Stmt) (err error) {
 		for _, item := range dict.Items {
-			_, err = stmt.Exec(gopinyin.Pinyins(item.Pinyin), strings.Join(item.Abbr, ""), item.Text, ID, 0)
+			_, err = stmt.Exec(gopinyin.Pinyins(item.Pinyin), strings.Join(item.Abbr, ""), item.Text, ID)
 			if err != nil {
 				return
 			}
 		}
 		return
-	}, "data", "pinyin", "abbr", "word", "sogou_id", "weight")
+	}, "data", "pinyin", "abbr", "word", "sogou_id")
 
 	if err == nil {
 		fmt.Fprintf(os.Stderr, "%d items added to database\n", len(dict.Items))

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
 
-	"github.com/caiguanhao/gopinyin"
 	"github.com/caiguanhao/suggest"
 	"github.com/urfave/cli"
 )
@@ -39,24 +37,9 @@ func main() {
 		},
 		{
 			Name:  "get",
-			Usage: "Get suggest for word.",
+			Usage: "Get suggestions for word.",
 			Action: func(c *cli.Context) error {
-				pys := gopinyin.Split(c.Args().First())
-				abbr := pys.Abbreviate().Join()
-				if abbr == "" {
-					return errors.New("please enter valid pinyins or pinyin abbreviations")
-				}
-				rets, err := s.Query("SELECT word FROM data WHERE abbr ~~ $1 AND CONTAINS(pinyin, $2) ORDER BY SCORE(abbr, $3) DESC LIMIT 20",
-					fmt.Sprintf("%%%s%%", abbr), pys, abbr)
-				if err != nil {
-					return err
-				}
-				for _, ret := range rets {
-					retData := ret.([]interface{})
-					word := *(retData[0].(*interface{}))
-					fmt.Printf("%s\n", word)
-				}
-				return nil
+				return s.Get(c.Args().First())
 			},
 		},
 	}
