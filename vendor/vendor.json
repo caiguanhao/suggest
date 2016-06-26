@@ -27,6 +27,12 @@
 			"revisionTime": "2016-06-25T14:25:26Z"
 		},
 		{
+			"checksumSHA1": "CCit+a5xcRwyhFyOTOLX4GANJiE=",
+			"path": "github.com/caiguanhao/searchresults",
+			"revision": "fb79d405950807ace5ea99fc4bb48ad03fd49e99",
+			"revisionTime": "2016-06-25T03:40:32Z"
+		},
+		{
 			"checksumSHA1": "aSy8bo6V/EIDQJjw7LDynElMrE0=",
 			"path": "github.com/caiguanhao/sogoudict",
 			"revision": "0b14331ccd593850306374ee8f505a0bc7f56b8d",
