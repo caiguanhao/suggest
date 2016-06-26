@@ -42,6 +42,13 @@ func main() {
 				return s.Get(c.Args().First())
 			},
 		},
+		{
+			Name:  "serve",
+			Usage: "Run suggestions server.",
+			Action: func(c *cli.Context) error {
+				return s.Serve()
+			},
+		},
 	}
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
