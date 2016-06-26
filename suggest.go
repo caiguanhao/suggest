@@ -97,7 +97,7 @@ func (suggest Suggest) BulkExec(statement string, bulk func(_ *sql.Stmt) error) 
 }
 
 // Execute an SQL query statement.
-func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []interface{}, err error) {
+func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []map[string]*interface{}, err error) {
 	var db *sql.DB
 	db, err = sql.Open("postgres", suggest.DataSource)
 	if err != nil {
@@ -116,12 +116,14 @@ func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []inter
 		if err != nil {
 			return
 		}
-		var ret []interface{}
-		for range cols {
+		var ret = map[string]*interface{}{}
+		var dest []interface{}
+		for _, col := range cols {
 			var data interface{}
-			ret = append(ret, &data)
+			ret[col] = &data
+			dest = append(dest, &data)
 		}
-		if err = rows.Scan(ret...); err != nil {
+		if err = rows.Scan(dest...); err != nil {
 			return
 		}
 		rets = append(rets, ret)

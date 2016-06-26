@@ -10,7 +10,7 @@ import (
 	"github.com/caiguanhao/searchresults"
 )
 
-func (suggest Suggest) get(pinyin string) (rets []interface{}, err error) {
+func (suggest Suggest) get(pinyin string) (rets []map[string]*interface{}, err error) {
 	pys := gopinyin.Split(pinyin)
 	abbr := pys.Abbreviate().Join()
 	if abbr == "" {
@@ -25,28 +25,27 @@ func (suggest Suggest) get(pinyin string) (rets []interface{}, err error) {
 }
 
 func (suggest Suggest) Get(pinyin string) (err error) {
-	var rets []interface{}
+	var rets []map[string]*interface{}
 
 	rets, err = suggest.get(pinyin)
 	if err != nil {
 		return
 	}
 
-	noCount := gotogether.Enumerable(rets).Filter(func(item interface{}) bool {
-		data := item.([]interface{})
-		count := (*(data[2].(*interface{}))).(int64)
-		if count > 0 {
-			return false
+	var noCount []interface{}
+	for _, ret := range rets {
+		if (*ret["sogou_count"]).(int64) > 0 {
+			continue
 		}
-		return true
-	})
+		noCount = append(noCount, ret)
+	}
 
 	if len(noCount) > 0 {
 		err = suggest.BulkExec("UPDATE data SET sogou_count = $1 WHERE ID = $2", func(stmt *sql.Stmt) (err error) {
-			noCount.Queue(func(item interface{}) {
-				data := item.([]interface{})
-				id := (*(data[0].(*interface{}))).(int64)
-				word := fmt.Sprintf("%s", *(data[1].(*interface{})))
+			gotogether.Enumerable(noCount).Queue(func(item interface{}) {
+				data := item.(map[string]*interface{})
+				id := *data["id"]
+				word := fmt.Sprintf("%s", *data["word"])
 				count, _ := searchresults.GetSogouCount(word)
 				_, err = stmt.Exec(count, id)
 			}).WithConcurrency(5).Run()
@@ -64,10 +63,7 @@ func (suggest Suggest) Get(pinyin string) (err error) {
 	}
 
 	for _, item := range rets {
-		data := item.([]interface{})
-		word := *(data[1].(*interface{}))
-		count := (*(data[2].(*interface{}))).(int64)
-		fmt.Printf("%s - %d\n", word, count)
+		fmt.Printf("%s - %d\n", *item["word"], *item["sogou_count"])
 	}
 	return
 }

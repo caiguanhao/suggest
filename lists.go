@@ -48,16 +48,22 @@ func (suggest Suggest) GetLists() (err error) {
 
 	fmt.Fprintln(os.Stderr, "list of all categories saved")
 
-	categories, err := suggest.Query("SELECT id, sogou_category_id, name FROM categories")
+	var rets []map[string]*interface{}
+	rets, err = suggest.Query("SELECT id, sogou_category_id, name FROM categories")
 	if err != nil {
 		return
 	}
 
+	var categories []interface{}
+	for _, ret := range rets {
+		categories = append(categories, ret)
+	}
+
 	gotogether.Enumerable(categories).Queue(func(category interface{}) {
-		categoryData := category.([]interface{})
-		categoryID := *(categoryData[0].(*interface{}))
-		sogouCategoryID := *(categoryData[1].(*interface{}))
-		categoryName := *(categoryData[2].(*interface{}))
+		data := category.(map[string]*interface{})
+		categoryID := *data["id"]
+		sogouCategoryID := *data["sogou_category_id"]
+		categoryName := *data["name"]
 
 		doc, err = goquery.NewDocument(fmt.Sprintf("http://pinyin.sogou.com/dict/cate/index/%d/download", sogouCategoryID))
 		if err != nil {
