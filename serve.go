@@ -29,6 +29,6 @@ func (suggest Suggest) Serve() (err error) {
 		// http.ServeFile(resp, req, "web/index.html")
 		resp.Write(web_index_html)
 	})
-	http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":8080", nil)
 	return
 }
