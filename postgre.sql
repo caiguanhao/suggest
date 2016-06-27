@@ -4,7 +4,7 @@ CREATE DATABASE suggest;
 
 CREATE TABLE data (
   id          integer NOT NULL,
-  pinyin      character varying[] DEFAULT '{}'::character varying[],
+  pinyin      character varying(255) NOT NULL,
   abbr        character varying(255) NOT NULL,
   word        character varying(255) NOT NULL,
   sogou_id    integer NOT NULL,
@@ -14,7 +14,7 @@ CREATE SEQUENCE data_id_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE 
 ALTER SEQUENCE data_id_seq OWNED BY data.id;
 ALTER TABLE ONLY data ADD CONSTRAINT data_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY data ALTER COLUMN id SET DEFAULT nextval('data_id_seq'::regclass);
-CREATE INDEX index_data_on_pinyin ON data USING gin (pinyin);
+CREATE INDEX index_data_on_pinyin ON data USING btree (pinyin);
 CREATE INDEX index_data_on_abbr ON data USING btree (abbr);
 CREATE INDEX index_data_on_word ON data USING btree (word);
 
@@ -47,28 +47,5 @@ CREATE FUNCTION SCORE(character varying, character varying)
 RETURNS integer AS $$
 BEGIN
 	RETURN 10000 - ((position($2 in $1) - 1) * 100) - (length($1) - length($2)) * 10;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE FUNCTION CONTAINS(character varying[], character varying[])
-RETURNS boolean AS $$
-DECLARE
-	b boolean;
-	i integer;
-	j integer;
-BEGIN
-	FOR i IN 1 .. array_upper($1, 1) - array_length($2, 1) + 1 LOOP
-		b := true;
-		FOR j IN 1 .. array_upper($2, 1) LOOP
-			IF NOT (position($2[j] in $1[i + j - 1]) = 1) THEN
-				b := false;
-				EXIT;
-			END IF;
-		END LOOP;
-		IF b = true THEN
-			RETURN true;
-		END IF;
-	END LOOP;
-	RETURN false;
 END;
 $$ LANGUAGE plpgsql;

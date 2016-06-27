@@ -10,6 +10,27 @@ import (
 	"github.com/caiguanhao/searchresults"
 )
 
+func regex(in []string) (out string) {
+	for _, s := range in {
+		out += `\^` + s + "[a-z]*"
+	}
+	return
+}
+
+func query(pys []string, abbr string) (stmt string, args []interface{}) {
+	stmt = "SELECT id, word, sogou_count FROM data"
+
+	if len(pys) == 1 {
+		stmt += " WHERE pinyin ~~ $1 ORDER BY SCORE(abbr, $2) DESC, sogou_count DESC LIMIT 10"
+		args = []interface{}{"%^" + pys[0] + "%", abbr}
+		return
+	}
+
+	stmt += " WHERE abbr ~~ $1 AND pinyin ~ $2 ORDER BY SCORE(abbr, $3) DESC, sogou_count DESC LIMIT 10"
+	args = []interface{}{"%" + abbr + "%", regex(pys), abbr}
+	return
+}
+
 func (suggest Suggest) get(pinyin string) (rets []map[string]*interface{}, err error) {
 	pys := gopinyin.Split(pinyin)
 	abbr := pys.Abbreviate().Join()
@@ -17,10 +38,9 @@ func (suggest Suggest) get(pinyin string) (rets []map[string]*interface{}, err e
 		err = errors.New("please enter valid pinyins or pinyin abbreviations")
 		return
 	}
-	rets, err = suggest.Query(
-		"SELECT id, word, sogou_count FROM data WHERE abbr ~~ $1 AND CONTAINS(pinyin, $2) ORDER BY SCORE(abbr, $3) DESC, sogou_count DESC LIMIT 10",
-		fmt.Sprintf("%%%s%%", abbr), pys, abbr,
-	)
+
+	stmt, args := query(pys, abbr)
+	rets, err = suggest.Query(stmt, args...)
 	return
 }
 
