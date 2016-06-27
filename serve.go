@@ -19,6 +19,10 @@ func (suggest Suggest) Serve() (err error) {
 		for _, item := range rets {
 			suggestions = append(suggestions, fmt.Sprintf("%s", *item["word"]))
 		}
+		if suggestions == nil {
+			resp.Write([]byte{'[', ']'})
+			return
+		}
 		json.NewEncoder(resp).Encode(suggestions)
 	})
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {

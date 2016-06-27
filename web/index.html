@@ -74,7 +74,8 @@
         queryTokenizer: Bloodhound.tokenizers.whitespace,
         remote: {
           url: '/suggestions?q=_QUERY_',
-          wildcard: '_QUERY_'
+          wildcard: '_QUERY_',
+          rateLimitWait: 0
         }
       })
     });
