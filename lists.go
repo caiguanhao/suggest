@@ -102,8 +102,9 @@ func (suggest Suggest) GetLists() (err error) {
 					content := s.Find(".dict_detail_show .show_content")
 					examples := content.Eq(0).Text()
 					downloadCount := content.Eq(1).Text()
-					updatedAt, _ := time.Parse("2006-01-02 15:04:05", content.Eq(2).Text())
-					_, err = stmt.Exec(matches[1], categoryID, name, downloadCount, examples, updatedAt)
+					loc, _ := time.LoadLocation("Asia/Shanghai")
+					updatedAt, _ := time.ParseInLocation("2006-01-02 15:04:05", content.Eq(2).Text(), loc)
+					_, err = stmt.Exec(matches[1], categoryID, name, downloadCount, examples, updatedAt.UTC())
 				})
 			}).WithConcurrency(5).Run()
 			return

@@ -17,6 +17,7 @@ ALTER TABLE ONLY data ALTER COLUMN id SET DEFAULT nextval('data_id_seq'::regclas
 CREATE INDEX index_data_on_pinyin ON data USING btree (pinyin);
 CREATE INDEX index_data_on_abbr ON data USING btree (abbr);
 CREATE INDEX index_data_on_word ON data USING btree (word);
+CREATE INDEX index_data_on_sogou_id ON data USING btree (sogou_id);
 
 CREATE TABLE categories (
   id                integer NOT NULL,
@@ -42,6 +43,8 @@ CREATE SEQUENCE dicts_id_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE
 ALTER SEQUENCE dicts_id_seq OWNED BY dicts.id;
 ALTER TABLE ONLY dicts ADD CONSTRAINT dicts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY dicts ALTER COLUMN id SET DEFAULT nextval('dicts_id_seq'::regclass);
+CREATE INDEX index_dicts_on_sogou_id ON dicts USING btree (sogou_id);
+CREATE INDEX index_dicts_on_category_id ON dicts USING btree (category_id);
 
 CREATE FUNCTION SCORE(character varying, character varying)
 RETURNS integer AS $$

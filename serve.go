@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 func (suggest Suggest) Serve() (err error) {
@@ -12,7 +14,7 @@ func (suggest Suggest) Serve() (err error) {
 		query := req.URL.Query().Get("q")
 		rets, err := suggest.get(query)
 		if err != nil {
-			fmt.Fprintln(resp, "[]")
+			resp.Write([]byte{'[', ']'})
 			return
 		}
 		var suggestions []string
@@ -25,10 +27,43 @@ func (suggest Suggest) Serve() (err error) {
 		}
 		json.NewEncoder(resp).Encode(suggestions)
 	})
+
+	http.HandleFunc("/lists", func(resp http.ResponseWriter, req *http.Request) {
+		if strings.Contains(req.Header.Get("Accept"), "application/json") {
+			c, err := suggest.Query("SELECT count(*) FROM dicts")
+			if err == nil {
+				resp.Header().Set("Total-Items", fmt.Sprintf("%d", *c[0]["count"]))
+			}
+			per, _ := strconv.Atoi(req.URL.Query().Get("per"))
+			if per < 1 || per > 100 {
+				per = 10
+			}
+			page, _ := strconv.Atoi(req.URL.Query().Get("page"))
+			if page < 1 {
+				page = 1
+			}
+			offset := per * (page - 1)
+			rets, err := suggest.Query(
+				"SELECT dicts.id, dicts.name, dicts.download_count, dicts.sogou_id, dicts.updated_at, categories.name as category_name FROM dicts "+
+					"LEFT JOIN categories ON categories.id = dicts.category_id "+
+					"ORDER BY download_count DESC LIMIT $1 OFFSET $2", per, offset)
+			if err != nil || rets == nil {
+				resp.Write([]byte{'[', ']'})
+				return
+			}
+			json.NewEncoder(resp).Encode(rets)
+			return
+		}
+
+		// http.ServeFile(resp, req, "web/lists.html")
+		resp.Write(web_lists_html)
+	})
+
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		// http.ServeFile(resp, req, "web/index.html")
 		resp.Write(web_index_html)
 	})
+
 	err = http.ListenAndServe(":8080", nil)
 	return
 }
