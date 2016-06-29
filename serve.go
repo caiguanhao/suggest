@@ -55,15 +55,20 @@ func (suggest Suggest) Serve() (err error) {
 			return
 		}
 
-		// http.ServeFile(resp, req, "web/lists.html")
-		resp.Write(web_lists_html)
+		serve(resp, req, "web/lists.html")
 	})
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		// http.ServeFile(resp, req, "web/index.html")
-		resp.Write(web_index_html)
+		serve(resp, req, "web/index.html")
 	})
 
 	err = http.ListenAndServe(":8080", nil)
 	return
+}
+
+func serve(resp http.ResponseWriter, req *http.Request, filename string) {
+	// http.ServeFile(resp, req, filename)
+	resp.Header().Set("Content-Type", "text/html; charset=utf-8")
+	resp.Header().Set("Content-Encoding", "gzip")
+	resp.Write(web[filename])
 }
