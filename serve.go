@@ -19,14 +19,29 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 
 	http.HandleFunc("/suggestions", func(resp http.ResponseWriter, req *http.Request) {
 		query := req.URL.Query().Get("q")
-		rets, err := suggest.get(query)
+		rets, pys, err := suggest.get(query)
 		if err != nil {
 			printErr(resp, err)
 			return
 		}
-		var suggestions []string
+		pinyinRegexp := pys.Regexp()
+		var suggestions []map[string]interface{}
 		for _, item := range rets {
-			suggestions = append(suggestions, fmt.Sprintf("%s", *item["word"]))
+			start, end, pinyin := -1, -1, (*item["pinyin"]).([]byte)
+			if pos := pinyinRegexp.FindIndex(pinyin); pos != nil {
+				start = 0
+				for i := 0; i < pos[0]; i++ {
+					if pinyin[i] == '^' {
+						start++
+					}
+				}
+				end = start + len(pys)
+			}
+			suggestions = append(suggestions, map[string]interface{}{
+				"start": start,
+				"end":   end,
+				"text":  fmt.Sprintf("%s", *item["word"]),
+			})
 		}
 		printJson(resp, suggestions, suggestions == nil)
 	})

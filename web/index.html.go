@@ -53,6 +53,9 @@ const web_index_html = `<!doctype html>
   span.twitter-typeahead {
     width: 100%;
   }
+  .hl {
+    color: #cb1c00;
+  }
 </style>
 </head>
 
@@ -79,7 +82,19 @@ const web_index_html = `<!doctype html>
           wildcard: '_QUERY_',
           rateLimitWait: 0
         }
-      })
+      }),
+      display: 'text',
+      templates: {
+        suggestion: function (sugg) {
+          var text = sugg.text;
+          if (sugg.start > -1) {
+            text = text.slice(0, sugg.start) +
+              '<span class="hl">' + text.slice(sugg.start, sugg.end) + '</span>' +
+              text.slice(sugg.end);
+          }
+          return '<div>' + text + '</div>';
+        }
+      }
     });
   </script>
 </body>

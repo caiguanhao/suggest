@@ -10,15 +10,8 @@ import (
 	"github.com/caiguanhao/searchresults"
 )
 
-func regex(in []string) (out string) {
-	for _, s := range in {
-		out += `\^` + s + "[a-z]*"
-	}
-	return
-}
-
-func query(pys []string, abbr string) (stmt string, args []interface{}) {
-	stmt = "SELECT id, word, sogou_count FROM data"
+func query(pys gopinyin.Pinyins, abbr string) (stmt string, args []interface{}) {
+	stmt = "SELECT id, word, pinyin, sogou_count FROM data"
 
 	if len(pys) == 1 {
 		stmt += " WHERE pinyin ~~ $1 ORDER BY SCORE(abbr, $2) DESC, sogou_count DESC LIMIT 10"
@@ -27,12 +20,12 @@ func query(pys []string, abbr string) (stmt string, args []interface{}) {
 	}
 
 	stmt += " WHERE abbr ~~ $1 AND pinyin ~ $2 ORDER BY SCORE(abbr, $3) DESC, sogou_count DESC LIMIT 10"
-	args = []interface{}{"%" + abbr + "%", regex(pys), abbr}
+	args = []interface{}{"%" + abbr + "%", pys.RegexpString(), abbr}
 	return
 }
 
-func (suggest Suggest) get(pinyin string) (rets []map[string]*interface{}, err error) {
-	pys := gopinyin.Split(pinyin)
+func (suggest Suggest) get(pinyin string) (rets []map[string]*interface{}, pys gopinyin.Pinyins, err error) {
+	pys = gopinyin.Split(pinyin)
 	abbr := pys.Abbreviate().Join()
 	if abbr == "" {
 		err = errors.New("please enter valid pinyins or pinyin abbreviations")
@@ -47,7 +40,7 @@ func (suggest Suggest) get(pinyin string) (rets []map[string]*interface{}, err e
 func (suggest Suggest) Get(pinyin string) (err error) {
 	var rets []map[string]*interface{}
 
-	rets, err = suggest.get(pinyin)
+	rets, _, err = suggest.get(pinyin)
 	if err != nil {
 		return
 	}
@@ -75,7 +68,7 @@ func (suggest Suggest) Get(pinyin string) (err error) {
 			return
 		}
 
-		rets, err = suggest.get(pinyin)
+		rets, _, err = suggest.get(pinyin)
 		if err != nil {
 			return
 		}

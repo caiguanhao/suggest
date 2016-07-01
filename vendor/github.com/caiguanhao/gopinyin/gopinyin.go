@@ -4,6 +4,7 @@ package gopinyin
 import (
 	"database/sql/driver"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -28,6 +29,20 @@ func (pys Pinyins) Expand() (out Pinyins) {
 // Convert the pinyin array to a string.
 func (pys Pinyins) Join(bytes ...byte) (out string) {
 	out = strings.Join(pys, string(bytes))
+	return
+}
+
+// Returns a compiled regular expression.
+func (pys Pinyins) Regexp() (out *regexp.Regexp) {
+	out = regexp.MustCompile(pys.RegexpString())
+	return
+}
+
+// Returns a regular expression string.
+func (pys Pinyins) RegexpString() (out string) {
+	for _, py := range pys {
+		out += `\^` + py + "[a-z]*"
+	}
 	return
 }
 
