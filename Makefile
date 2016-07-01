@@ -1,18 +1,28 @@
-GOFILES := $(shell find . -name '*.go' -not -path './vendor/*')
-HTMLFILES := $(shell find . -name '*.html' -not -path './vendor/*')
+GOFILES = $(shell find . -name '*.go' -not -path './vendor/*')
+HTMLFILES = $(shell find web -name '*.html')
+HTMLGOFILES = $(patsubst %.html,%.html.go,$(HTMLFILES))
+WEBGO = ./web/web.go
 
 suggest: ./suggest/suggest
 
-html: ./web.go
+html: $(WEBGO)
 
 serve: suggest
 	./suggest/suggest serve --local
 
-./suggest/suggest: $(GOFILES)
+./suggest/suggest: $(GOFILES) $(WEBGO)
 	go build -o $@ ./suggest
 
-./web.go: $(HTMLFILES)
-	(echo "package suggest\nvar web = map[string][]byte{" && \
-		for i in $^; do \
-			echo "\"$$i\": []byte{\n$$(cat $$i | gzip -n | xxd -i),\n},"; done && echo "\n}") | \
-				gofmt > $@
+$(WEBGO): $(HTMLGOFILES)
+	(echo "package web" && \
+		echo "var Files = map[string][]byte{" && \
+			for i in $^; do i=$${i%%.go} && \
+				echo "\"$$i\": []byte($${i//[^A-Za-z0-9]/_}),"; \
+					done && \
+						echo "}") | gofmt > $@
+
+$(HTMLGOFILES): $(HTMLFILES)
+	for i in $^; do \
+		(echo "package web" && \
+			echo "const $${i//[^A-Za-z0-9]/_} = \`$$(cat $$i)\n\`") | gofmt > $$i.go; \
+				done

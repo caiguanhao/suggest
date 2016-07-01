@@ -1,15 +1,14 @@
 package suggest
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/caiguanhao/suggest/web"
 	"github.com/urfave/cli"
 )
 
@@ -101,18 +100,15 @@ func serveHtml(resp http.ResponseWriter, req *http.Request, filename string) {
 		return
 	}
 
-	if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
-		reader, err := gzip.NewReader(bytes.NewReader(web[filename]))
-		if err != nil {
-			printErr(resp, err)
-			return
-		}
-		io.Copy(resp, reader)
-		reader.Close()
+	resp.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+		resp.Header().Set("Content-Encoding", "gzip")
+		writer := gzip.NewWriter(resp)
+		writer.Write(web.Files[filename])
+		writer.Flush()
 		return
 	}
 
-	resp.Header().Set("Content-Type", "text/html; charset=utf-8")
-	resp.Header().Set("Content-Encoding", "gzip")
-	resp.Write(web[filename])
+	resp.Write(web.Files[filename])
 }
