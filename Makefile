@@ -6,7 +6,7 @@ suggest: ./suggest/suggest
 html: ./web.go
 
 serve: suggest
-	./suggest/suggest serve
+	./suggest/suggest serve --local
 
 ./suggest/suggest: $(GOFILES)
 	go build -o $@ ./suggest

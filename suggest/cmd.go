@@ -45,8 +45,14 @@ func main() {
 		{
 			Name:  "serve",
 			Usage: "Run suggestions server.",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "local",
+					Usage: "Serve unprecompiled local HTML files.",
+				},
+			},
 			Action: func(c *cli.Context) error {
-				return s.Serve()
+				return s.Serve(c)
 			},
 		},
 	}

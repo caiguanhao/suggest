@@ -1,73 +1,117 @@
 package suggest
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/urfave/cli"
 )
 
-func (suggest Suggest) Serve() (err error) {
+var useLocalHtml bool
+
+func (suggest Suggest) Serve(c *cli.Context) (err error) {
+	useLocalHtml = c.Bool("local")
+
 	http.HandleFunc("/suggestions", func(resp http.ResponseWriter, req *http.Request) {
-		resp.Header().Set("Content-Type", "application/json")
 		query := req.URL.Query().Get("q")
 		rets, err := suggest.get(query)
 		if err != nil {
-			resp.Write([]byte{'[', ']'})
+			printErr(resp, err)
 			return
 		}
 		var suggestions []string
 		for _, item := range rets {
 			suggestions = append(suggestions, fmt.Sprintf("%s", *item["word"]))
 		}
-		if suggestions == nil {
-			resp.Write([]byte{'[', ']'})
-			return
-		}
-		json.NewEncoder(resp).Encode(suggestions)
+		printJson(resp, suggestions, suggestions == nil)
 	})
 
 	http.HandleFunc("/lists", func(resp http.ResponseWriter, req *http.Request) {
 		if strings.Contains(req.Header.Get("Accept"), "application/json") {
 			c, err := suggest.Query("SELECT count(*) FROM dicts")
-			if err == nil {
-				resp.Header().Set("Total-Items", fmt.Sprintf("%d", *c[0]["count"]))
+			if err != nil {
+				printErr(resp, err)
+				return
 			}
-			per, _ := strconv.Atoi(req.URL.Query().Get("per"))
-			if per < 1 || per > 100 {
-				per = 10
-			}
-			page, _ := strconv.Atoi(req.URL.Query().Get("page"))
-			if page < 1 {
-				page = 1
-			}
-			offset := per * (page - 1)
-			rets, err := suggest.Query(
+			resp.Header().Set("Total-Items", fmt.Sprintf("%d", *c[0]["count"]))
+			per, _, offset := paginate(req)
+			dicts, err := suggest.Query(
 				"SELECT dicts.id, dicts.name, dicts.download_count, dicts.sogou_id, dicts.updated_at, categories.name as category_name FROM dicts "+
 					"LEFT JOIN categories ON categories.id = dicts.category_id "+
 					"ORDER BY download_count DESC LIMIT $1 OFFSET $2", per, offset)
-			if err != nil || rets == nil {
-				resp.Write([]byte{'[', ']'})
+			if err != nil {
+				printErr(resp, err)
 				return
 			}
-			json.NewEncoder(resp).Encode(rets)
+			printJson(resp, dicts, dicts == nil)
 			return
 		}
 
-		serve(resp, req, "web/lists.html")
+		serveHtml(resp, req, "web/lists.html")
 	})
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
-		serve(resp, req, "web/index.html")
+		serveHtml(resp, req, "web/index.html")
 	})
 
 	err = http.ListenAndServe(":8080", nil)
 	return
 }
 
-func serve(resp http.ResponseWriter, req *http.Request, filename string) {
-	// http.ServeFile(resp, req, filename)
+func paginate(req *http.Request) (per, page, offset int) {
+	per, _ = strconv.Atoi(req.URL.Query().Get("per"))
+	if per < 1 || per > 100 {
+		per = 10
+	}
+	page, _ = strconv.Atoi(req.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	offset = per * (page - 1)
+	return
+}
+
+func printJson(resp http.ResponseWriter, content interface{}, isNil bool) {
+	resp.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if isNil {
+		resp.Write([]byte{'[', ']'})
+		return
+	}
+	if err := json.NewEncoder(resp).Encode(content); err != nil {
+		printErr(resp, err)
+	}
+}
+
+func printErr(resp http.ResponseWriter, err error) {
+	resp.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(resp).Encode(map[string]string{
+		"error": err.Error(),
+	})
+}
+
+func serveHtml(resp http.ResponseWriter, req *http.Request, filename string) {
+	if useLocalHtml {
+		http.ServeFile(resp, req, filename)
+		return
+	}
+
+	if !strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+		reader, err := gzip.NewReader(bytes.NewReader(web[filename]))
+		if err != nil {
+			printErr(resp, err)
+			return
+		}
+		io.Copy(resp, reader)
+		reader.Close()
+		return
+	}
+
 	resp.Header().Set("Content-Type", "text/html; charset=utf-8")
 	resp.Header().Set("Content-Encoding", "gzip")
 	resp.Write(web[filename])
