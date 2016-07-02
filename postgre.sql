@@ -43,7 +43,7 @@ CREATE SEQUENCE dicts_id_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE
 ALTER SEQUENCE dicts_id_seq OWNED BY dicts.id;
 ALTER TABLE ONLY dicts ADD CONSTRAINT dicts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY dicts ALTER COLUMN id SET DEFAULT nextval('dicts_id_seq'::regclass);
-CREATE INDEX index_dicts_on_sogou_id ON dicts USING btree (sogou_id);
+CREATE UNIQUE INDEX index_dicts_on_sogou_id ON dicts USING btree (sogou_id);
 CREATE INDEX index_dicts_on_category_id ON dicts USING btree (category_id);
 
 CREATE FUNCTION SCORE(character varying, character varying)

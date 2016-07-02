@@ -21,7 +21,9 @@ func main() {
 			Name:  "get-lists",
 			Usage: "Get dictionary links of all pages of each category.",
 			Action: func(c *cli.Context) error {
-				return s.GetLists()
+				return s.GetLists(func(format string, a ...interface{}) {
+					fmt.Fprintf(os.Stderr, format, a...)
+				})
 			},
 		},
 		{

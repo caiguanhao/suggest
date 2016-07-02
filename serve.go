@@ -48,12 +48,8 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 
 	http.HandleFunc("/lists", func(resp http.ResponseWriter, req *http.Request) {
 		if strings.Contains(req.Header.Get("Accept"), "application/json") {
-			c, err := suggest.Query("SELECT count(*) FROM dicts")
-			if err != nil {
-				printErr(resp, err)
-				return
-			}
-			resp.Header().Set("Total-Items", fmt.Sprintf("%d", *c[0]["count"]))
+			count, _ := suggest.GetListsCount()
+			resp.Header().Set("Total-Items", fmt.Sprintf("%d", count))
 			per, _, offset := paginate(req)
 			dicts, err := suggest.Query(
 				"SELECT dicts.id, dicts.name, dicts.download_count, dicts.sogou_id, dicts.updated_at, categories.name as category_name FROM dicts "+
@@ -69,6 +65,8 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 
 		serveHtml(resp, req, "web/lists.html")
 	})
+
+	http.HandleFunc("/get-lists", suggest.GetListsHandler())
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		serveHtml(resp, req, "web/index.html")
@@ -103,6 +101,7 @@ func printJson(resp http.ResponseWriter, content interface{}, isNil bool) {
 }
 
 func printErr(resp http.ResponseWriter, err error) {
+	resp.Header().Set("Content-Type", "application/json; charset=utf-8")
 	resp.WriteHeader(http.StatusBadRequest)
 	json.NewEncoder(resp).Encode(map[string]string{
 		"error": err.Error(),

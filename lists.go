@@ -1,19 +1,21 @@
 package suggest
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
-	"os"
+	"net/http"
 	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/caiguanhao/gotogether"
+	"github.com/gorilla/websocket"
 )
 
 // Get dictionary links of all pages of each category.
-func (suggest Suggest) GetLists() (err error) {
+func (suggest Suggest) GetLists(out func(format string, a ...interface{})) (err error) {
 	var doc *goquery.Document
 
 	doc, err = goquery.NewDocument("http://pinyin.sogou.com/dict/")
@@ -46,7 +48,7 @@ func (suggest Suggest) GetLists() (err error) {
 		return
 	}
 
-	fmt.Fprintln(os.Stderr, "list of all categories saved")
+	out("list of all categories saved\n")
 
 	var rets []map[string]*interface{}
 	rets, err = suggest.Query("SELECT id, sogou_category_id, name FROM categories")
@@ -76,7 +78,7 @@ func (suggest Suggest) GetLists() (err error) {
 			return
 		}
 
-		fmt.Fprintf(os.Stderr, "found %d pages of %s\n", totalPages, categoryName)
+		out("found %d pages of %s\n", totalPages, categoryName)
 
 		var urls []interface{}
 		for i := 1; i <= totalPages; i++ {
@@ -110,7 +112,74 @@ func (suggest Suggest) GetLists() (err error) {
 			return
 		}, "dicts", "sogou_id", "category_id", "name", "download_count", "examples", "updated_at")
 
-		fmt.Fprintf(os.Stderr, "info of all dicts in %s saved\n", categoryName)
+		out("info of all dicts in %s saved\n", categoryName)
 	}).WithConcurrency(5).Run()
+
+	out("finished getting lists\n")
 	return
+}
+
+func (suggest Suggest) GetListsCount() (count int64, err error) {
+	var ret []map[string]*interface{}
+	ret, err = suggest.Query("SELECT count(*) FROM dicts")
+	if err != nil || ret == nil {
+		return
+	}
+	count = (*ret[0]["count"]).(int64)
+	return
+}
+
+var (
+	upgrader = websocket.Upgrader{
+		Error: func(resp http.ResponseWriter, req *http.Request, status int, err error) {
+			printErr(resp, err)
+		},
+	}
+	clients        = make(map[*websocket.Conn]bool)
+	isGettingLists = false
+	getLists       = []byte{'g', 'e', 't'}
+)
+
+func broadcast(format string, a ...interface{}) {
+	for conn := range clients {
+		conn.WriteJSON(map[string]interface{}{
+			"is_getting_lists": isGettingLists,
+			"status_text":      fmt.Sprintf(format, a...),
+		})
+	}
+}
+
+func (suggest Suggest) GetListsHandler() func(resp http.ResponseWriter, req *http.Request) {
+	return func(resp http.ResponseWriter, req *http.Request) {
+		ws, err := upgrader.Upgrade(resp, req, nil)
+		if err != nil {
+			return
+		}
+		clients[ws] = true
+		fmt.Println("new client:", ws.RemoteAddr().String(), "total clients:", len(clients))
+		for {
+			_, msg, err := ws.ReadMessage()
+			if err != nil {
+				break
+			}
+			if bytes.Equal(msg, getLists) {
+				if isGettingLists {
+					broadcast("list getting has already been started, please wait\n")
+					continue
+				}
+				go func() {
+					isGettingLists = true
+					suggest.GetLists(broadcast)
+					isGettingLists = false
+					time.Sleep(2 * time.Second)
+					broadcast("")
+				}()
+			}
+		}
+		ws.Close()
+		if _, ok := clients[ws]; ok {
+			delete(clients, ws)
+			fmt.Println("deleted client:", ws.RemoteAddr().String(), "total clients:", len(clients))
+		}
+	}
 }

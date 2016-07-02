@@ -12,8 +12,10 @@ const web_lists_html = `<!doctype html>
 <body>
   <div class="container">
     <div class="row">
-      <div class="col-md-offset-2 col-md-8 col-sm-offset-1 col-sm-10 col-xs-12">
+      <div class="col-md-offset-1 col-md-10 col-sm-12 col-xs-12">
         <div class="page-header">
+          <a href="/">Suggest</a>
+          /
           Lists (<span id="total">0</span>)
         </div>
         <table class="table" id="lists">
@@ -37,6 +39,13 @@ const web_lists_html = `<!doctype html>
                 <select class="form-control" id="pages" style="width: 100px; display: inline-block;"></select>
               </td>
             </tr>
+            <tr>
+              <td colspan="5">
+                <div class="btn-group">
+                  <button type="button" class="btn btn-default" disabled id="get-lists">Get Lists</button>
+                </div>
+              </td>
+            </tr>
           </tfoot>
         </table>
       </div>
@@ -56,14 +65,19 @@ const web_lists_html = `<!doctype html>
     }
     var itemsPerPage = 10;
     var currentPage = 1;
+    var getting = false;
     function get () {
+      if (getting) return;
+      getting = true;
       $.getJSON('/lists', { per: itemsPerPage, page: currentPage }).then(function (lists, _, xhr) {
         var totalItems = +xhr.getResponseHeader('Total-Items');
         $('#total').html(totalItems.toLocaleString());
         $('#pages').empty();
-        for (var i = 0; i < Math.ceil(totalItems / itemsPerPage); i++) {
+        var pages = Math.ceil(totalItems / itemsPerPage);
+        for (var i = 0; i < pages; i++) {
           $('#pages').append('<option value="' + (i + 1) + '">' + (i + 1) + '</option>');
         }
+        $('#prev, #next, #pages').prop('disabled', pages < 2);
         $('#pages').val(currentPage);
         $('#lists tbody').empty();
         $.each(lists, function (_, item) {
@@ -77,6 +91,8 @@ const web_lists_html = `<!doctype html>
             '</tr>'
           );
         });
+      }).always(function () {
+        getting = false;
       });
     }
     get();
@@ -93,6 +109,35 @@ const web_lists_html = `<!doctype html>
     $('#next').on('click', function () {
       currentPage++;
       $('#pages').val(currentPage).trigger('change');
+    });
+    var getListsWS = new WebSocket('ws://' + window.location.host + '/get-lists');
+    getListsWS.onopen = function (evt) {
+      $('#get-lists').prop('disabled', false).text('Get Lists');
+    };
+    getListsWS.onclose = function (evt) {
+      $('#get-lists').prop('disabled', true).text('Reload Page to Reconnect');
+      getListsWS = null;
+    };
+    getListsWS.onmessage = function (evt) {
+      var resp = JSON.parse(evt.data);
+      $('#get-lists').prop('disabled', resp.is_getting_lists).text(resp.status_text);
+      get();
+    };
+    getListsWS.onmessage = function (evt) {
+      var resp = JSON.parse(evt.data);
+      var text = resp.status_text;
+      if (text) text = 'Getting lists: ' + text;
+      else      text = 'Get Lists';
+      $('#get-lists').prop('disabled', resp.is_getting_lists).text(text);
+      get();
+    };
+    getListsWS.onerror = function (evt) {
+      $('#get-lists').prop('disabled', false).text('Get Lists');
+    };
+    $('#get-lists').on('click', function () {
+      if (!getListsWS) return;
+      getListsWS.send('get');
+      $('#get-lists').prop('disabled', true).text('Loading...');
     });
   </script>
 </body>

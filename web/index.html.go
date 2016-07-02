@@ -62,9 +62,11 @@ const web_index_html = `<!doctype html>
 <body>
   <div class="container">
     <div class="row">
-      <div class="col-sm-offset-3 col-sm-6">
+      <div class="col-md-offset-1 col-md-10 col-sm-12 col-xs-12">
         <div class="page-header">
           Suggest
+          /
+          <a href="/lists">Lists</a>
         </div>
         <input type="text" class="form-control" placeholder="Search for..." id="search">
       </div>
