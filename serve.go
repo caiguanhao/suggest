@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/caiguanhao/suggest/web"
@@ -22,8 +23,10 @@ var (
 	}
 	clients        = make(map[*websocket.Conn]bool)
 	isGettingLists = false
-	isGettingDicts = false
+	isGettingDicts = make(map[int]bool)
 	useLocalHtml   = false
+
+	mutex sync.Mutex
 )
 
 func (suggest Suggest) Serve(c *cli.Context) (err error) {
@@ -91,16 +94,19 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 
 func getListsBroadcast(format string, a ...interface{}) {
 	for conn := range clients {
+		mutex.Lock()
 		conn.WriteJSON(map[string]interface{}{
 			"type":             "get-lists",
 			"is_getting_lists": isGettingLists,
 			"status_text":      fmt.Sprintf(format, a...),
 		})
+		mutex.Unlock()
 	}
 }
 
 func getDictsBroadcast(id int, period string, done, total int64, format string, a ...interface{}) {
 	for conn := range clients {
+		mutex.Lock()
 		conn.WriteJSON(map[string]interface{}{
 			"type":        "get-dicts",
 			"value":       id,
@@ -109,6 +115,7 @@ func getDictsBroadcast(id int, period string, done, total int64, format string, 
 			"total":       total,
 			"status_text": fmt.Sprintf(format, a...),
 		})
+		mutex.Unlock()
 	}
 }
 
@@ -130,15 +137,22 @@ func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
 			printWSError(ws, err)
 			return
 		}
-		if isGettingDicts {
+		if isGettingDicts[id] {
 			printWSErrorString(ws, "dict getting has already been started, please wait\n")
 			return
 		}
-		isGettingDicts = true
-		suggest.GetDict(id, func(period string, done, total int64, format string, a ...interface{}) {
+		mutex.Lock()
+		isGettingDicts[id] = true
+		mutex.Unlock()
+		if err := suggest.GetDict(id, func(period string, done, total int64, format string, a ...interface{}) {
 			getDictsBroadcast(id, period, done, total, format, a...)
-		})
-		isGettingDicts = false
+		}); err != nil {
+			printWSError(ws, err)
+			getDictsBroadcast(id, "error", 0, 0, "")
+		}
+		mutex.Lock()
+		isGettingDicts[id] = false
+		mutex.Unlock()
 	}
 }
 
@@ -150,8 +164,8 @@ func (suggest Suggest) GetHandler() func(resp http.ResponseWriter, req *http.Req
 		}
 		clients[ws] = true
 		fmt.Println("new client:", ws.RemoteAddr().String(), "total clients:", len(clients))
-		var msg map[string]string
 		for {
+			var msg map[string]string
 			_, reader, err := ws.NextReader()
 			if err != nil {
 				break
@@ -203,7 +217,9 @@ func printErr(resp http.ResponseWriter, err error) {
 }
 
 func printWSErrorString(ws *websocket.Conn, err string) {
+	mutex.Lock()
 	ws.WriteJSON(map[string]string{"error": err})
+	mutex.Unlock()
 }
 
 func printWSError(ws *websocket.Conn, err error) {

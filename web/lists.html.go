@@ -23,9 +23,15 @@ const web_lists_html = `<!doctype html>
           /
           Lists (<span id="total">0</span>)
         </div>
+        <div id="alert" class="alert alert-danger alert-dismissible hidden">
+          <button type="button" class="close"><span>&times;</span></button>
+          <strong>Error:</strong>
+          <span class="text"></span>
+        </div>
         <table class="table" id="lists">
           <thead>
             <tr>
+              <th><input type="checkbox" name="all"></th>
               <th>ID</th>
               <th>Name</th>
               <th>Suggestions</th>
@@ -37,7 +43,7 @@ const web_lists_html = `<!doctype html>
           <tbody></tbody>
           <tfoot>
             <tr>
-              <td colspan="6">
+              <td colspan="7">
                 <div class="btn-group">
                   <button type="button" class="btn btn-default" id="prev">Prev</button>
                   <button type="button" class="btn btn-default" id="next">Next</button>
@@ -46,9 +52,10 @@ const web_lists_html = `<!doctype html>
               </td>
             </tr>
             <tr>
-              <td colspan="6">
+              <td colspan="7">
                 <div class="btn-group">
                   <button type="button" class="btn btn-default" disabled id="get-lists">Get Lists</button>
+                  <button type="button" class="btn btn-default" disabled id="get-dicts">Get Dicts</button>
                 </div>
               </td>
             </tr>
@@ -84,11 +91,13 @@ const web_lists_html = `<!doctype html>
           $('#pages').append('<option value="' + (i + 1) + '">' + (i + 1) + '</option>');
         }
         $('#prev, #next, #pages').prop('disabled', pages < 2);
+        $('input[name="all"]').prop('checked', false);
         $('#pages').val(currentPage);
         $('#lists tbody').empty();
         $.each(lists, function (_, item) {
           $('#lists tbody').append(
             '<tr>' +
+              '<td><input type="checkbox" name="sogou_id" value="' + item.sogou_id + '"></td>' +
               '<td>' + item.id + '</td>' +
               '<td><a href="http://pinyin.sogou.com/dict/detail/index/' + item.sogou_id + '" target="_blank">' + decode(item.name) + '</a></td>' +
               '<td><a href data-get="' + item.sogou_id + '">' + item.suggestion_count.toLocaleString() + '</a></td>' +
@@ -121,15 +130,17 @@ const web_lists_html = `<!doctype html>
     var getWS = new WebSocket('ws://' + window.location.host + '/get');
     getWS.onopen = function (evt) {
       $('#get-lists').prop('disabled', false).text('Get Lists');
+      $('#get-dicts').prop('disabled', false);
     };
     getWS.onclose = function (evt) {
       $('#get-lists').prop('disabled', true).text('Reload Page to Reconnect');
+      $('#get-dicts').prop('disabled', true);
       getWS = null;
     };
     getWS.onmessage = function (evt) {
       var resp = JSON.parse(evt.data);
       if (resp.error) {
-        alert(resp.error);
+        $('#alert').removeClass('hidden').find('.text').text(resp.error);
         return;
       }
       switch (resp.type) {
@@ -144,12 +155,13 @@ const web_lists_html = `<!doctype html>
         var id = resp.value;
         var link = $('a[data-get="' + id + '"]');
         if (link.length) {
-          link.replaceWith('<div class="progress" data-get="' + id + '"><div class="progress-bar" style="width: 0%;">0%</div></div>');
+          link.replaceWith('<div class="progress" data-get="' + id + '">' +
+            '<div class="progress-bar progress-bar-success" style="width: 0%;">0%</div></div>');
         }
         var percent = resp.done / resp.total * 100;
         percent = Math.max(+percent.toFixed(2), 0) + '%';
         $('div[data-get="' + id + '"] .progress-bar').text(percent).css('width', percent);
-        if (resp.period === 'imported' && resp.done === resp.total) {
+        if (resp.period === 'error' || resp.period === 'imported' && resp.done === resp.total) {
           $('[data-get="' + id + '"]').replaceWith('<a href data-get="' + id + '">' + resp.total.toLocaleString() + '</a>');
         }
         break;
@@ -157,6 +169,7 @@ const web_lists_html = `<!doctype html>
     };
     getWS.onerror = function (evt) {
       $('#get-lists').prop('disabled', false).text('Get Lists');
+      $('#get-dicts').prop('disabled', false);
     };
 
     $('#get-lists').on('click', function () {
@@ -169,6 +182,27 @@ const web_lists_html = `<!doctype html>
       e.preventDefault();
       if (!getWS) return;
       getWS.send(JSON.stringify({ type: 'get-dicts', value: String($(this).data('get')) }));
+    });
+
+    $(document).on('click', '#lists tbody tr', function (e) {
+      if (e.target.nodeName === 'INPUT') return;
+      var checkbox = $(this).find('input[type="checkbox"]');
+      checkbox.prop('checked', !checkbox.prop('checked'));
+    });
+
+    $('input[name="all"]').click(function () {
+      $('#lists tbody input[name="sogou_id"]').prop('checked', $(this).prop('checked'));
+    });
+
+    $('#get-dicts').on('click', function () {
+      if (!getWS) return;
+      $('input[name="sogou_id"]:checked').each(function (_, item) {
+        getWS.send(JSON.stringify({ type: 'get-dicts', value: item.value }));
+      });
+    });
+
+    $(document).on('click', '.alert-dismissible .close', function () {
+      $(this).parent().addClass('hidden');
     });
   </script>
 </body>
