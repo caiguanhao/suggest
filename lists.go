@@ -12,8 +12,18 @@ import (
 )
 
 // Get dictionary links of all pages of each category.
-func (suggest Suggest) GetLists(out func(format string, a ...interface{})) (err error) {
+func (suggest Suggest) GetLists(out func(format string, a ...interface{}), progress func(done, total int)) (err error) {
+	if out == nil {
+		out = func(format string, a ...interface{}) {}
+	}
+	if progress == nil {
+		progress = func(done, total int) {}
+	}
+
 	var doc *goquery.Document
+
+	done, total := 0, 0
+	progress(done, total)
 
 	doc, err = goquery.NewDocument("http://pinyin.sogou.com/dict/")
 	if err != nil {
@@ -21,15 +31,10 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{})) (err 
 	}
 
 	titles := doc.Find(".dict_category_list_title")
+	total += titles.Length()
+	progress(done, total)
 	regexCategoryUrl := regexp.MustCompile("/dict/cate/index/([0-9]+)")
-	err = suggest.BulkInsert(func(db *sql.DB) bool {
-		var count int
-		db.QueryRow("SELECT count(*) FROM categories").Scan(&count)
-		if count == titles.Length() {
-			return true
-		}
-		return true
-	}, func(stmt *sql.Stmt) (err error) {
+	err = suggest.BulkInsert(nil, func(stmt *sql.Stmt) (err error) {
 		titles.Each(func(_ int, s *goquery.Selection) {
 			a := s.Find("a")
 			name := a.Text()
@@ -38,6 +43,8 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{})) (err 
 			if len(matches) > 1 {
 				_, err = stmt.Exec(matches[1], name)
 			}
+			done += 1
+			progress(done, total)
 		})
 		return
 	}, "categories", "sogou_category_id", "name")
@@ -76,6 +83,8 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{})) (err 
 		}
 
 		out("found %d pages of %s\n", totalPages, categoryName)
+		total += totalPages
+		progress(done, total)
 
 		var urls []interface{}
 		for i := 1; i <= totalPages; i++ {
@@ -90,6 +99,8 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{})) (err 
 				if err != nil {
 					return
 				}
+				done += 1
+				progress(done, total)
 				doc.Find("#dict_detail_list .dict_detail_block").Each(func(_ int, s *goquery.Selection) {
 					link := s.Find(".detail_title a")
 					href := link.AttrOr("href", "")

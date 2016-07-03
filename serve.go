@@ -97,6 +97,18 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 	return
 }
 
+func getListsProgress(done, total int) {
+	for conn := range clients {
+		mutex.Lock()
+		conn.WriteJSON(map[string]interface{}{
+			"type":  "get-lists-progress",
+			"done":  done,
+			"total": total,
+		})
+		mutex.Unlock()
+	}
+}
+
 func getListsBroadcast(format string, a ...interface{}) {
 	for conn := range clients {
 		mutex.Lock()
@@ -109,16 +121,26 @@ func getListsBroadcast(format string, a ...interface{}) {
 	}
 }
 
-func getDictsBroadcast(id int, period string, done, total int64, format string, a ...interface{}) {
+func getDictsProgress(id, done, total int) {
 	for conn := range clients {
 		mutex.Lock()
 		conn.WriteJSON(map[string]interface{}{
-			"type":        "get-dicts",
-			"value":       id,
-			"period":      period,
-			"done":        done,
-			"total":       total,
-			"status_text": fmt.Sprintf(format, a...),
+			"type":  "get-dicts-progress",
+			"value": id,
+			"done":  done,
+			"total": total,
+		})
+		mutex.Unlock()
+	}
+}
+
+func getDictsDoneBroadcast(id, total int) {
+	for conn := range clients {
+		mutex.Lock()
+		conn.WriteJSON(map[string]interface{}{
+			"type":  "get-dicts-done",
+			"value": id,
+			"total": total,
 		})
 		mutex.Unlock()
 	}
@@ -132,7 +154,7 @@ func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
 			return
 		}
 		isGettingLists = true
-		suggest.GetLists(getListsBroadcast)
+		suggest.GetLists(getListsBroadcast, getListsProgress)
 		isGettingLists = false
 		time.Sleep(2 * time.Second)
 		getListsBroadcast("")
@@ -142,18 +164,21 @@ func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
 			printWSError(ws, err)
 			return
 		}
-		if isGettingDicts[id] {
+		mutex.Lock()
+		getting := isGettingDicts[id]
+		mutex.Unlock()
+		if getting {
 			printWSErrorString(ws, "dict getting has already been started, please wait\n")
 			return
 		}
 		mutex.Lock()
 		isGettingDicts[id] = true
 		mutex.Unlock()
-		if err := suggest.GetDict(id, func(period string, done, total int64, format string, a ...interface{}) {
-			getDictsBroadcast(id, period, done, total, format, a...)
-		}); err != nil {
+		if total, err := suggest.GetDict(id, nil, getDictsProgress); err != nil {
 			printWSError(ws, err)
-			getDictsBroadcast(id, "error", 0, 0, "")
+			getDictsDoneBroadcast(id, 0)
+		} else {
+			getDictsDoneBroadcast(id, total)
 		}
 		mutex.Lock()
 		isGettingDicts[id] = false

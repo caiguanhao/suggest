@@ -23,7 +23,7 @@ func main() {
 			Action: func(c *cli.Context) error {
 				return s.GetLists(func(format string, a ...interface{}) {
 					fmt.Fprintf(os.Stderr, format, a...)
-				})
+				}, nil)
 			},
 		},
 		{
@@ -34,16 +34,16 @@ func main() {
 				if err != nil {
 					return err
 				}
-				return s.GetDict(dict, func(period string, done, total int64, format string, a ...interface{}) {
+				_, err = s.GetDict(dict, func(id int, format string, a ...interface{}) {
+					fmt.Fprintf(os.Stderr, format, a...)
+				}, func(id, done, total int) {
 					percent := float64(done) / float64(total) * 100
 					if percent < 100 {
 						fmt.Fprintf(os.Stderr, "-> %.2f%% done", percent)
 						fmt.Fprint(os.Stderr, "\r")
-					} else if format != "" {
-						a = append([]interface{}{period}, a...)
-						fmt.Fprintf(os.Stderr, "[%s] "+format, a...)
 					}
 				})
+				return err
 			},
 		},
 		{

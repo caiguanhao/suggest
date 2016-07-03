@@ -59,6 +59,13 @@ const web_lists_html = `<!doctype html>
                 </div>
               </td>
             </tr>
+            <tr id="lists-progress" class="hidden">
+              <td colspan="7">
+                <div class="progress">
+                  <div class="progress-bar progress-bar-success"></div>
+                </div>
+              </td>
+            </tr>
           </tfoot>
         </table>
       </div>
@@ -127,6 +134,8 @@ const web_lists_html = `<!doctype html>
       $('#pages').val(currentPage).trigger('change');
     });
 
+    var getListsProgressTimeout;
+
     var getWS = new WebSocket('ws://' + window.location.host + '/get');
     getWS.onopen = function (evt) {
       $('#get-lists').prop('disabled', false).text('Get Lists');
@@ -144,6 +153,22 @@ const web_lists_html = `<!doctype html>
         return;
       }
       switch (resp.type) {
+      case 'get-lists-progress':
+        var percent = Math.floor(resp.done / resp.total * 100) + '%';
+        $('#lists-progress').removeClass('hidden');
+        var status = resp.done.toLocaleString() + ' / ' + resp.total.toLocaleString() + ' - ' + percent;
+        $('#lists-progress .progress-bar').text(status).css('width', percent);
+        if (resp.done === resp.total) {
+          if (getListsProgressTimeout) {
+            clearTimeout(getListsProgressTimeout);
+          }
+          getListsProgressTimeout = setTimeout(function () {
+            $('#lists-progress').addClass('hidden');
+            $('#lists-progress .progress-bar').text('').css('width', '0%');
+            getListsProgressTimeout = undefined;
+          }, 3000);
+        }
+        break;
       case 'get-lists':
         var text = resp.status_text;
         if (text) text = 'Getting lists: ' + text;
@@ -151,7 +176,7 @@ const web_lists_html = `<!doctype html>
         $('#get-lists').prop('disabled', resp.is_getting_lists).text(text);
         get();
         break;
-      case 'get-dicts':
+      case 'get-dicts-progress':
         var id = resp.value;
         var link = $('a[data-get="' + id + '"]');
         if (link.length) {
@@ -161,9 +186,10 @@ const web_lists_html = `<!doctype html>
         var percent = resp.done / resp.total * 100;
         percent = Math.max(+percent.toFixed(2), 0) + '%';
         $('div[data-get="' + id + '"] .progress-bar').text(percent).css('width', percent);
-        if (resp.period === 'error' || resp.period === 'imported' && resp.done === resp.total) {
-          $('[data-get="' + id + '"]').replaceWith('<a href data-get="' + id + '">' + resp.total.toLocaleString() + '</a>');
-        }
+        break;
+      case 'get-dicts-done':
+        var id = resp.value;
+        $('[data-get="' + id + '"]').replaceWith('<a href data-get="' + id + '">' + resp.total.toLocaleString() + '</a>');
         break;
       }
     };

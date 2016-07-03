@@ -15,14 +15,14 @@ import (
 
 type reader struct {
 	reader   io.Reader
-	read     int64
+	read     int
 	last     time.Time
-	progress func(read int64)
+	progress func(read int)
 }
 
 func (r *reader) Read(p []byte) (n int, err error) {
 	n, err = r.reader.Read(p)
-	r.read += int64(n)
+	r.read += n
 	now := time.Now()
 	timediff := float64(now.Sub(r.last).Nanoseconds()) / 1e9
 	if timediff > 0.1 {
@@ -38,11 +38,19 @@ func join(in []string) (out string) {
 }
 
 // Download dictionary file and save its content into database.
-func (suggest Suggest) GetDict(ID int, out func(period string, done, total int64, format string, a ...interface{})) (err error) {
+func (suggest Suggest) GetDict(ID int, out func(id int, format string, a ...interface{}), progress func(id, done, total int)) (total int, err error) {
+	if out == nil {
+		out = func(id int, format string, a ...interface{}) {}
+	}
+	if progress == nil {
+		progress = func(id, done, total int) {}
+	}
+
 	var req *http.Request
 	url := fmt.Sprintf("http://download.pinyin.sogou.com/dict/download_cell.php?id=%d&name=", ID)
 
-	out("downloading", 0, 0, "downloading dict %d from %s\n", ID, url)
+	out(ID, "[downloading] downloading dict %d from %s\n", ID, url)
+	progress(ID, 0, 0)
 
 	req, err = http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -54,20 +62,21 @@ func (suggest Suggest) GetDict(ID int, out func(period string, done, total int64
 	if err != nil {
 		return
 	}
-	total := resp.ContentLength
+	total = int(resp.ContentLength)
 	defer resp.Body.Close()
 	var body []byte
 	body, err = ioutil.ReadAll(&reader{
 		reader: resp.Body,
-		progress: func(read int64) {
-			out("downloading", read, total, "")
+		progress: func(read int) {
+			progress(ID, read, total)
 		},
 	})
 	if err != nil {
 		return
 	}
 
-	out("downloaded", total, total, "dict %d downloaded (%d bytes)\n", ID, total)
+	out(ID, "[downloaded] dict %d downloaded (%d bytes)\n", ID, total)
+	progress(ID, total, total)
 
 	var dict sogoudict.SogouDict
 	dict, err = sogoudict.Parse(bytes.NewReader(body))
@@ -75,15 +84,15 @@ func (suggest Suggest) GetDict(ID int, out func(period string, done, total int64
 		return
 	}
 
-	total = int64(len(dict.Items))
+	total = len(dict.Items)
 
-	out("importing", total, total, "found %d items in dict %d\n", total, ID)
+	out(ID, "[importing] found %d items in dict %d\n", total, ID)
 
 	err = suggest.BulkInsert(func(db *sql.DB) bool {
 		var count int64
 		db.QueryRow("SELECT count(*) FROM suggestions WHERE sogou_id = $1", ID).Scan(&count)
 		if count > 0 {
-			out("imported", count, count, "%d already added\n", ID)
+			out(ID, "[imported] %d already added\n", ID)
 			return false
 		}
 		return true
@@ -97,7 +106,7 @@ func (suggest Suggest) GetDict(ID int, out func(period string, done, total int64
 			now := time.Now()
 			timediff := float64(now.Sub(last).Nanoseconds()) / 1e9
 			if timediff > 0.5 {
-				out("importing", int64(i+1), total, "")
+				progress(ID, i+1, total)
 				last = now
 			}
 		}
@@ -105,7 +114,8 @@ func (suggest Suggest) GetDict(ID int, out func(period string, done, total int64
 	}, "suggestions", "pinyin", "abbr", "word", "length", "sogou_id")
 
 	if err == nil {
-		out("imported", total, total, "%d items added to database\n", total)
+		out(ID, "[imported] %d items added to database\n", total)
+		progress(ID, total, total)
 	} else {
 		return
 	}
