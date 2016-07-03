@@ -49,11 +49,7 @@ const web_lists_html = `<!doctype html>
                   <button type="button" class="btn btn-default" id="next">Next</button>
                 </div>
                 <select class="form-control" id="pages" style="width: 100px; display: inline-block;"></select>
-              </td>
-            </tr>
-            <tr>
-              <td colspan="7">
-                <div class="btn-group">
+                <div class="btn-group pull-right">
                   <button type="button" class="btn btn-default" disabled id="get-lists">Get Lists</button>
                   <button type="button" class="btn btn-default" disabled id="get-dicts">Get Dicts</button>
                 </div>
@@ -64,6 +60,11 @@ const web_lists_html = `<!doctype html>
                 <div class="progress">
                   <div class="progress-bar progress-bar-success"></div>
                 </div>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="7">
+                <div id="status">Ready.</div>
               </td>
             </tr>
           </tfoot>
@@ -138,12 +139,11 @@ const web_lists_html = `<!doctype html>
 
     var getWS = new WebSocket('ws://' + window.location.host + '/get');
     getWS.onopen = function (evt) {
-      $('#get-lists').prop('disabled', false).text('Get Lists');
-      $('#get-dicts').prop('disabled', false);
+      $('#get-lists, #get-dicts').prop('disabled', false);
     };
     getWS.onclose = function (evt) {
-      $('#get-lists').prop('disabled', true).text('Reload Page to Reconnect');
-      $('#get-dicts').prop('disabled', true);
+      $('#status').text('Reload Page to Reconnect');
+      $('#get-lists, #get-dicts').prop('disabled', true);
       getWS = null;
     };
     getWS.onmessage = function (evt) {
@@ -158,6 +158,7 @@ const web_lists_html = `<!doctype html>
         $('#lists-progress').removeClass('hidden');
         var status = resp.done.toLocaleString() + ' / ' + resp.total.toLocaleString() + ' - ' + percent;
         $('#lists-progress .progress-bar').text(status).css('width', percent);
+        $('#get-lists').prop('disabled', true);
         if (resp.done === resp.total) {
           if (getListsProgressTimeout) {
             clearTimeout(getListsProgressTimeout);
@@ -165,15 +166,13 @@ const web_lists_html = `<!doctype html>
           getListsProgressTimeout = setTimeout(function () {
             $('#lists-progress').addClass('hidden');
             $('#lists-progress .progress-bar').text('').css('width', '0%');
+            $('#get-lists').prop('disabled', false);
             getListsProgressTimeout = undefined;
           }, 3000);
         }
         break;
       case 'get-lists':
-        var text = resp.status_text;
-        if (text) text = 'Getting lists: ' + text;
-        else      text = 'Get Lists';
-        $('#get-lists').prop('disabled', resp.is_getting_lists).text(text);
+        $('#status').text(resp.status_text);
         get();
         break;
       case 'get-dicts-progress':
@@ -194,14 +193,13 @@ const web_lists_html = `<!doctype html>
       }
     };
     getWS.onerror = function (evt) {
-      $('#get-lists').prop('disabled', false).text('Get Lists');
-      $('#get-dicts').prop('disabled', false);
+      $('#get-lists, #get-dicts').prop('disabled', false);
     };
 
     $('#get-lists').on('click', function () {
       if (!getWS) return;
       getWS.send(JSON.stringify({ type: 'get-lists' }));
-      $('#get-lists').prop('disabled', true).text('Loading...');
+      $('#get-lists').prop('disabled', true);
     });
 
     $(document).on('click', '[data-get]', function (e) {

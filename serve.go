@@ -113,9 +113,8 @@ func getListsBroadcast(format string, a ...interface{}) {
 	for conn := range clients {
 		mutex.Lock()
 		conn.WriteJSON(map[string]interface{}{
-			"type":             "get-lists",
-			"is_getting_lists": isGettingLists,
-			"status_text":      fmt.Sprintf(format, a...),
+			"type":        "get-lists",
+			"status_text": fmt.Sprintf(format, a...),
 		})
 		mutex.Unlock()
 	}
