@@ -90,7 +90,7 @@ func (suggest Suggest) GetDict(ID int, out func(period string, done, total int64
 	}, func(stmt *sql.Stmt) (err error) {
 		last := time.Now()
 		for i, item := range dict.Items {
-			_, err = stmt.Exec(join(item.Pinyin), strings.Join(item.Abbr, ""), item.Text, ID)
+			_, err = stmt.Exec(join(item.Pinyin), strings.Join(item.Abbr, ""), item.Text, len(item.Pinyin), ID)
 			if err != nil {
 				return
 			}
@@ -102,7 +102,7 @@ func (suggest Suggest) GetDict(ID int, out func(period string, done, total int64
 			}
 		}
 		return
-	}, "suggestions", "pinyin", "abbr", "word", "sogou_id")
+	}, "suggestions", "pinyin", "abbr", "word", "length", "sogou_id")
 
 	if err == nil {
 		out("imported", total, total, "%d items added to database\n", total)

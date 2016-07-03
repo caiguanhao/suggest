@@ -7,6 +7,7 @@ CREATE TABLE suggestions (
   pinyin      character varying(255) NOT NULL,
   abbr        character varying(255) NOT NULL,
   word        character varying(255) NOT NULL,
+  length      integer NOT NULL,
   sogou_id    integer NOT NULL,
   sogou_count integer DEFAULT 0 NOT NULL
 );

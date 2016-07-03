@@ -14,8 +14,14 @@ func query(pys gopinyin.Pinyins, abbr string) (stmt string, args []interface{}) 
 	stmt = "SELECT id, word, pinyin, sogou_count FROM suggestions"
 
 	if len(pys) == 1 {
-		stmt += " WHERE pinyin ~~ $1 ORDER BY SCORE(abbr, $2) DESC, sogou_count DESC LIMIT 10"
-		args = []interface{}{"%^" + pys[0] + "%", abbr}
+		if len(pys[0]) == 1 {
+			stmt += " WHERE abbr ~~ $1 ORDER BY length ASC, sogou_count DESC LIMIT 10"
+			args = []interface{}{"%" + pys[0] + "%"}
+			return
+		}
+
+		stmt += " WHERE pinyin ~~ $1 ORDER BY length ASC, sogou_count DESC LIMIT 10"
+		args = []interface{}{"%^" + pys[0] + "%"}
 		return
 	}
 
