@@ -116,12 +116,10 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{})) (err 
 	return
 }
 
-func (suggest Suggest) GetListsCount() (count int64, err error) {
-	var ret []map[string]*interface{}
-	ret, err = suggest.Query("SELECT count(*) FROM dicts")
+func (suggest Suggest) GetListsCount() (int64, error) {
+	ret, err := suggest.QueryOne("SELECT count(*) FROM dicts")
 	if err != nil || ret == nil {
-		return
+		return 0, err
 	}
-	count = (*ret[0]["count"]).(int64)
-	return
+	return (*ret["count"]).(int64), nil
 }

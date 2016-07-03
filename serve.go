@@ -32,6 +32,11 @@ var (
 func (suggest Suggest) Serve(c *cli.Context) (err error) {
 	useLocalHtml = c.Bool("local")
 
+	http.HandleFunc("/approximate_suggestion_count", func(resp http.ResponseWriter, req *http.Request) {
+		count, _ := suggest.QueryOne("SELECT reltuples AS approximate_suggestion_count FROM pg_class WHERE relname = $1", "suggestions")
+		printJson(resp, count, count == nil)
+	})
+
 	http.HandleFunc("/suggestions", func(resp http.ResponseWriter, req *http.Request) {
 		query := req.URL.Query().Get("q")
 		rets, pys, err := suggest.get(query)

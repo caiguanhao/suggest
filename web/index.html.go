@@ -64,7 +64,7 @@ const web_index_html = `<!doctype html>
     <div class="row">
       <div class="col-md-offset-1 col-md-10 col-sm-12 col-xs-12">
         <div class="page-header">
-          Suggest
+          Suggest (<span id="total">0</span>)
           /
           <a href="/lists">Lists</a>
         </div>
@@ -74,6 +74,9 @@ const web_index_html = `<!doctype html>
   </div>
 
   <script>
+    $.getJSON('/approximate_suggestion_count').then(function (count) {
+      $('#total').html(count.approximate_suggestion_count.toLocaleString());
+    });
     $('#search').typeahead(null, {
       limit: 20,
       source: new Bloodhound({

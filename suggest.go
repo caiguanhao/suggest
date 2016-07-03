@@ -131,3 +131,39 @@ func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []map[s
 	err = rows.Err()
 	return
 }
+
+func (suggest Suggest) QueryOne(sqlQuery string, args ...interface{}) (ret map[string]*interface{}, err error) {
+	var db *sql.DB
+	db, err = sql.Open("postgres", suggest.DataSource)
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	var rows *sql.Rows
+	rows, err = db.Query(sqlQuery, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	rows.Next()
+	var cols []string
+	cols, err = rows.Columns()
+	if err != nil {
+		return
+	}
+	ret = make(map[string]*interface{})
+	var dest []interface{}
+	for _, col := range cols {
+		var data interface{}
+		ret[col] = &data
+		dest = append(dest, &data)
+	}
+	if err = rows.Scan(dest...); err != nil {
+		ret = nil
+		return
+	}
+	if err = rows.Err(); err != nil {
+		ret = nil
+	}
+	return
+}
