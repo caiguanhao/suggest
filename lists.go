@@ -1,17 +1,14 @@
 package suggest
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/caiguanhao/gotogether"
-	"github.com/gorilla/websocket"
 )
 
 // Get dictionary links of all pages of each category.
@@ -127,59 +124,4 @@ func (suggest Suggest) GetListsCount() (count int64, err error) {
 	}
 	count = (*ret[0]["count"]).(int64)
 	return
-}
-
-var (
-	upgrader = websocket.Upgrader{
-		Error: func(resp http.ResponseWriter, req *http.Request, status int, err error) {
-			printErr(resp, err)
-		},
-	}
-	clients        = make(map[*websocket.Conn]bool)
-	isGettingLists = false
-	getLists       = []byte{'g', 'e', 't'}
-)
-
-func broadcast(format string, a ...interface{}) {
-	for conn := range clients {
-		conn.WriteJSON(map[string]interface{}{
-			"is_getting_lists": isGettingLists,
-			"status_text":      fmt.Sprintf(format, a...),
-		})
-	}
-}
-
-func (suggest Suggest) GetListsHandler() func(resp http.ResponseWriter, req *http.Request) {
-	return func(resp http.ResponseWriter, req *http.Request) {
-		ws, err := upgrader.Upgrade(resp, req, nil)
-		if err != nil {
-			return
-		}
-		clients[ws] = true
-		fmt.Println("new client:", ws.RemoteAddr().String(), "total clients:", len(clients))
-		for {
-			_, msg, err := ws.ReadMessage()
-			if err != nil {
-				break
-			}
-			if bytes.Equal(msg, getLists) {
-				if isGettingLists {
-					broadcast("list getting has already been started, please wait\n")
-					continue
-				}
-				go func() {
-					isGettingLists = true
-					suggest.GetLists(broadcast)
-					isGettingLists = false
-					time.Sleep(2 * time.Second)
-					broadcast("")
-				}()
-			}
-		}
-		ws.Close()
-		if _, ok := clients[ws]; ok {
-			delete(clients, ws)
-			fmt.Println("deleted client:", ws.RemoteAddr().String(), "total clients:", len(clients))
-		}
-	}
 }

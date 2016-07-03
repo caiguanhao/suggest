@@ -7,12 +7,24 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/caiguanhao/suggest/web"
+	"github.com/gorilla/websocket"
 	"github.com/urfave/cli"
 )
 
-var useLocalHtml bool
+var (
+	upgrader = websocket.Upgrader{
+		Error: func(resp http.ResponseWriter, req *http.Request, status int, err error) {
+			printErr(resp, err)
+		},
+	}
+	clients        = make(map[*websocket.Conn]bool)
+	isGettingLists = false
+	isGettingDicts = false
+	useLocalHtml   = false
+)
 
 func (suggest Suggest) Serve(c *cli.Context) (err error) {
 	useLocalHtml = c.Bool("local")
@@ -52,7 +64,8 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 			resp.Header().Set("Total-Items", fmt.Sprintf("%d", count))
 			per, _, offset := paginate(req)
 			dicts, err := suggest.Query(
-				"SELECT dicts.id, dicts.name, dicts.download_count, dicts.sogou_id, dicts.updated_at, categories.name as category_name FROM dicts "+
+				"SELECT dicts.id, dicts.name, dicts.download_count, dicts.suggestion_count, dicts.sogou_id, "+
+					"dicts.updated_at, categories.name as category_name FROM dicts "+
 					"LEFT JOIN categories ON categories.id = dicts.category_id "+
 					"ORDER BY download_count DESC LIMIT $1 OFFSET $2", per, offset)
 			if err != nil {
@@ -66,7 +79,7 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 		serveHtml(resp, req, "web/lists.html")
 	})
 
-	http.HandleFunc("/get-lists", suggest.GetListsHandler())
+	http.HandleFunc("/get", suggest.GetHandler())
 
 	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
 		serveHtml(resp, req, "web/index.html")
@@ -74,6 +87,87 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 
 	err = http.ListenAndServe(":8080", nil)
 	return
+}
+
+func getListsBroadcast(format string, a ...interface{}) {
+	for conn := range clients {
+		conn.WriteJSON(map[string]interface{}{
+			"type":             "get-lists",
+			"is_getting_lists": isGettingLists,
+			"status_text":      fmt.Sprintf(format, a...),
+		})
+	}
+}
+
+func getDictsBroadcast(id int, period string, done, total int64, format string, a ...interface{}) {
+	for conn := range clients {
+		conn.WriteJSON(map[string]interface{}{
+			"type":        "get-dicts",
+			"value":       id,
+			"period":      period,
+			"done":        done,
+			"total":       total,
+			"status_text": fmt.Sprintf(format, a...),
+		})
+	}
+}
+
+func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
+	switch msg["type"] {
+	case "get-lists":
+		if isGettingLists {
+			printWSErrorString(ws, "list getting has already been started, please wait\n")
+			return
+		}
+		isGettingLists = true
+		suggest.GetLists(getListsBroadcast)
+		isGettingLists = false
+		time.Sleep(2 * time.Second)
+		getListsBroadcast("")
+	case "get-dicts":
+		id, err := strconv.Atoi(msg["value"])
+		if err != nil {
+			printWSError(ws, err)
+			return
+		}
+		if isGettingDicts {
+			printWSErrorString(ws, "dict getting has already been started, please wait\n")
+			return
+		}
+		isGettingDicts = true
+		suggest.GetDict(id, func(period string, done, total int64, format string, a ...interface{}) {
+			getDictsBroadcast(id, period, done, total, format, a...)
+		})
+		isGettingDicts = false
+	}
+}
+
+func (suggest Suggest) GetHandler() func(resp http.ResponseWriter, req *http.Request) {
+	return func(resp http.ResponseWriter, req *http.Request) {
+		ws, err := upgrader.Upgrade(resp, req, nil)
+		if err != nil {
+			return
+		}
+		clients[ws] = true
+		fmt.Println("new client:", ws.RemoteAddr().String(), "total clients:", len(clients))
+		var msg map[string]string
+		for {
+			_, reader, err := ws.NextReader()
+			if err != nil {
+				break
+			}
+			if err := json.NewDecoder(reader).Decode(&msg); err != nil {
+				printWSError(ws, err)
+				continue
+			}
+			go suggest.execute(ws, msg)
+		}
+		ws.Close()
+		if _, ok := clients[ws]; ok {
+			delete(clients, ws)
+			fmt.Println("deleted client:", ws.RemoteAddr().String(), "total clients:", len(clients))
+		}
+	}
 }
 
 func paginate(req *http.Request) (per, page, offset int) {
@@ -106,6 +200,14 @@ func printErr(resp http.ResponseWriter, err error) {
 	json.NewEncoder(resp).Encode(map[string]string{
 		"error": err.Error(),
 	})
+}
+
+func printWSErrorString(ws *websocket.Conn, err string) {
+	ws.WriteJSON(map[string]string{"error": err})
+}
+
+func printWSError(ws *websocket.Conn, err error) {
+	printWSErrorString(ws, err.Error())
 }
 
 func serveHtml(resp http.ResponseWriter, req *http.Request, filename string) {

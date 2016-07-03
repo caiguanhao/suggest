@@ -11,7 +11,7 @@ import (
 )
 
 func query(pys gopinyin.Pinyins, abbr string) (stmt string, args []interface{}) {
-	stmt = "SELECT id, word, pinyin, sogou_count FROM data"
+	stmt = "SELECT id, word, pinyin, sogou_count FROM suggestions"
 
 	if len(pys) == 1 {
 		stmt += " WHERE pinyin ~~ $1 ORDER BY SCORE(abbr, $2) DESC, sogou_count DESC LIMIT 10"
@@ -54,11 +54,11 @@ func (suggest Suggest) Get(pinyin string) (err error) {
 	}
 
 	if len(noCount) > 0 {
-		err = suggest.BulkExec("UPDATE data SET sogou_count = $1 WHERE ID = $2", func(stmt *sql.Stmt) (err error) {
+		err = suggest.BulkExec("UPDATE suggestions SET sogou_count = $1 WHERE ID = $2", func(stmt *sql.Stmt) (err error) {
 			gotogether.Enumerable(noCount).Queue(func(item interface{}) {
-				data := item.(map[string]*interface{})
-				id := *data["id"]
-				word := fmt.Sprintf("%s", *data["word"])
+				suggestion := item.(map[string]*interface{})
+				id := *suggestion["id"]
+				word := fmt.Sprintf("%s", *suggestion["word"])
 				count, _ := searchresults.GetSogouCount(word)
 				_, err = stmt.Exec(count, id)
 			}).WithConcurrency(5).Run()
