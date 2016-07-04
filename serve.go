@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/caiguanhao/suggest/web"
 	"github.com/gorilla/websocket"
@@ -97,52 +96,51 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 	return
 }
 
-func getListsProgress(done, total int) {
+func broadcast(content interface{}) {
+	if len(clients) == 0 {
+		return
+	}
+	body, err := json.Marshal(content)
+	if err != nil {
+		return
+	}
 	for conn := range clients {
 		mutex.Lock()
-		conn.WriteJSON(map[string]interface{}{
-			"type":  "get-lists-progress",
-			"done":  done,
-			"total": total,
-		})
+		conn.WriteMessage(websocket.TextMessage, body)
 		mutex.Unlock()
 	}
+}
+
+func getListsProgress(done, total int) {
+	broadcast(map[string]interface{}{
+		"type":  "get-lists-progress",
+		"done":  done,
+		"total": total,
+	})
 }
 
 func getListsBroadcast(format string, a ...interface{}) {
-	for conn := range clients {
-		mutex.Lock()
-		conn.WriteJSON(map[string]interface{}{
-			"type":        "get-lists",
-			"status_text": fmt.Sprintf(format, a...),
-		})
-		mutex.Unlock()
-	}
+	broadcast(map[string]interface{}{
+		"type":        "get-lists",
+		"status_text": fmt.Sprintf(format, a...),
+	})
 }
 
 func getDictsProgress(id, done, total int) {
-	for conn := range clients {
-		mutex.Lock()
-		conn.WriteJSON(map[string]interface{}{
-			"type":  "get-dicts-progress",
-			"value": id,
-			"done":  done,
-			"total": total,
-		})
-		mutex.Unlock()
-	}
+	broadcast(map[string]interface{}{
+		"type":  "get-dicts-progress",
+		"value": id,
+		"done":  done,
+		"total": total,
+	})
 }
 
 func getDictsDoneBroadcast(id, total int) {
-	for conn := range clients {
-		mutex.Lock()
-		conn.WriteJSON(map[string]interface{}{
-			"type":  "get-dicts-done",
-			"value": id,
-			"total": total,
-		})
-		mutex.Unlock()
-	}
+	broadcast(map[string]interface{}{
+		"type":  "get-dicts-done",
+		"value": id,
+		"total": total,
+	})
 }
 
 func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
@@ -155,8 +153,6 @@ func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
 		isGettingLists = true
 		suggest.GetLists(getListsBroadcast, getListsProgress)
 		isGettingLists = false
-		time.Sleep(2 * time.Second)
-		getListsBroadcast("")
 	case "get-dicts":
 		id, err := strconv.Atoi(msg["value"])
 		if err != nil {

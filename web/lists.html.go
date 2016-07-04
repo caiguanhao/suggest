@@ -167,6 +167,7 @@ const web_lists_html = `<!doctype html>
             $('#lists-progress').addClass('hidden');
             $('#lists-progress .progress-bar').text('').css('width', '0%');
             $('#get-lists').prop('disabled', false);
+            $('#status').text('');
             getListsProgressTimeout = undefined;
           }, 3000);
         }
