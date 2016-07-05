@@ -67,18 +67,12 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 
 	http.HandleFunc("/lists", func(resp http.ResponseWriter, req *http.Request) {
 		if strings.Contains(req.Header.Get("Accept"), "application/json") {
-			count, _ := suggest.GetListsCount()
-			resp.Header().Set("Total-Items", fmt.Sprintf("%d", count))
-			per, _, offset := paginate(req)
-			dicts, err := suggest.Query(
-				"SELECT dicts.id, dicts.name, dicts.download_count, dicts.suggestion_count, dicts.sogou_id, "+
-					"dicts.updated_at, categories.name as category_name FROM dicts "+
-					"LEFT JOIN categories ON categories.id = dicts.category_id "+
-					"ORDER BY download_count DESC LIMIT $1 OFFSET $2", per, offset)
+			count, dicts, err := suggest.CountAndQuery(getListsCountAndQuery(req))
 			if err != nil {
 				printErr(resp, err)
 				return
 			}
+			resp.Header().Set("Total-Items", fmt.Sprintf("%d", count))
 			printJson(resp, dicts, dicts == nil)
 			return
 		}

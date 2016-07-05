@@ -96,6 +96,17 @@ func (suggest Suggest) BulkExec(statement string, bulk func(_ *sql.Stmt) error) 
 	return
 }
 
+func (suggest Suggest) CountAndQuery(getQuery, countQuery string, getArgs, countArgs []interface{}) (count int64, rets []map[string]*interface{}, err error) {
+	var c map[string]*interface{}
+	c, err = suggest.QueryOne(countQuery, countArgs...)
+	if err != nil || c == nil {
+		return
+	}
+	count = (*c["count"]).(int64)
+	rets, err = suggest.Query(getQuery, getArgs...)
+	return
+}
+
 // Execute an SQL query statement.
 func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []map[string]*interface{}, err error) {
 	var db *sql.DB

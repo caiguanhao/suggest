@@ -3,8 +3,10 @@ package suggest
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -133,4 +135,47 @@ func (suggest Suggest) GetListsCount() (int64, error) {
 		return 0, err
 	}
 	return (*ret["count"]).(int64), nil
+}
+
+func getListsCountAndQuery(req *http.Request) (getQuery, countQuery string, getArgs, countArgs []interface{}) {
+	query := req.URL.Query().Get("q")
+	category, _ := strconv.Atoi(req.URL.Query().Get("category_id"))
+	per, _, offset := paginate(req)
+
+	getQuery = "SELECT dicts.id, dicts.name, dicts.download_count, dicts.suggestion_count, dicts.sogou_id, " +
+		"dicts.category_id, dicts.updated_at, categories.name as category_name FROM dicts " +
+		"LEFT JOIN categories ON categories.id = dicts.category_id "
+	countQuery = "SELECT count(*) FROM dicts "
+
+	var wheres []string
+	if len(query) > 0 {
+		wheres = append(wheres, "dicts.name ~~ $$")
+		getArgs = append(getArgs, "%"+query+"%")
+		countArgs = append(countArgs, "%"+query+"%")
+	}
+	if category > 0 {
+		wheres = append(wheres, "dicts.category_id = $$")
+		getArgs = append(getArgs, category)
+		countArgs = append(countArgs, category)
+	}
+	if len(wheres) > 0 {
+		getQuery += "WHERE " + strings.Join(wheres, " AND ") + " "
+		countQuery += "WHERE " + strings.Join(wheres, " AND ") + " "
+	}
+
+	getQuery += "ORDER BY download_count DESC LIMIT $$ OFFSET $$"
+	getArgs = append(getArgs, per, offset)
+	getQuery, countQuery = replacePos(getQuery), replacePos(countQuery)
+	return
+}
+
+// replace '$$ .. $$ .. $$ ..' with '$1 .. $2 .. $3 ..'
+func replacePos(in string) (out string) {
+	for i, part := range strings.Split(in, "$$") {
+		if i > 0 {
+			out += "$" + strconv.Itoa(i)
+		}
+		out += part
+	}
+	return
 }
