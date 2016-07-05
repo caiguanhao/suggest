@@ -11,6 +11,22 @@ const web_lists_html = `<!doctype html>
 .progress {
   margin-bottom: 0;
 }
+[data-sortable] {
+  cursor: pointer;
+}
+[data-sortable]:after {
+  content: '▬';
+  float: right;
+  color: #666;
+  font-size: 10px;
+  line-height: 20px;
+}
+.sorted[data-sortable]:after {
+  content: '▲';
+}
+.sorted.desc[data-sortable]:after {
+  content: '▼';
+}
 </style>
 </head>
 
@@ -32,12 +48,12 @@ const web_lists_html = `<!doctype html>
           <thead>
             <tr>
               <th><input type="checkbox" name="all"></th>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Suggestions</th>
-              <th>Downloads</th>
-              <th>Category</th>
-              <th>Updated At</th>
+              <th data-sortable="sogou_id">ID</th>
+              <th data-sortable="name">Name</th>
+              <th data-sortable="suggestion">Suggestions</th>
+              <th data-sortable="download">Downloads</th>
+              <th data-sortable="category">Category</th>
+              <th data-sortable="updated_at">Updated At</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -113,9 +129,15 @@ const web_lists_html = `<!doctype html>
         current.page = Math.max(+qs.page || 1, 1);
         current.query = qs.query || undefined;
         current.category = +qs.category || undefined;
+        current.order = qs.order || undefined;
         for (var key in current) {
           if (!current[key]) delete current[key];
         }
+        var o = current.order;
+        if (!o) o = '-download';
+        var isDESC = o.slice(0, 1) === '-';
+        if (isDESC) o = o.slice(1);
+        $('[data-sortable="' + o + '"]').addClass('sorted')[isDESC ? 'addClass' : 'removeClass']('desc');
       }
 
       function getLists () {
@@ -126,7 +148,8 @@ const web_lists_html = `<!doctype html>
           per: itemsPerPage,
           page: current.page,
           q: current.query,
-          category_id: current.category
+          category_id: current.category,
+          order: current.order
         }).then(function (lists, _, xhr) {
           var totalItems = +xhr.getResponseHeader('Total-Items');
           $('#total').html(totalItems.toLocaleString());
@@ -202,6 +225,16 @@ const web_lists_html = `<!doctype html>
           e.preventDefault();
           current.category = $(this).data('category');
           current.page = 1;
+          getLists();
+        });
+      }
+
+      function setupSorter () {
+        $(document).on('click', '[data-sortable]', function () {
+          $('[data-sortable]').not(this).removeClass('sorted');
+          $(this).addClass('sorted').toggleClass('desc');
+          var dir = $(this).hasClass('desc') ? '-' : '';
+          current.order = dir + $(this).data('sortable');
           getLists();
         });
       }
@@ -306,6 +339,7 @@ const web_lists_html = `<!doctype html>
         getLists();
         setupPaginator();
         setupFilter();
+        setupSorter();
         setupWebSocket();
         setupWebsocketControls();
       }

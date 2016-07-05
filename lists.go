@@ -137,15 +137,34 @@ func (suggest Suggest) GetListsCount() (int64, error) {
 	return (*ret["count"]).(int64), nil
 }
 
+var getListsSortBy = map[string]string{
+	"id":         "dicts.id",
+	"sogou_id":   "dicts.sogou_id",
+	"name":       "dicts.name",
+	"suggestion": "dicts.suggestion_count",
+	"download":   "dicts.download_count",
+	"category":   "dicts.category_id",
+	"updated_at": "dicts.updated_at",
+}
+
 func getListsCountAndQuery(req *http.Request) (getQuery, countQuery string, getArgs, countArgs []interface{}) {
 	query := req.URL.Query().Get("q")
 	category, _ := strconv.Atoi(req.URL.Query().Get("category_id"))
 	per, _, offset := paginate(req)
+	order := req.URL.Query().Get("order")
 
-	getQuery = "SELECT dicts.id, dicts.name, dicts.download_count, dicts.suggestion_count, dicts.sogou_id, " +
-		"dicts.category_id, dicts.updated_at, categories.name as category_name FROM dicts " +
-		"LEFT JOIN categories ON categories.id = dicts.category_id "
-	countQuery = "SELECT count(*) FROM dicts "
+	var get, count []string
+	get = append(get, "SELECT", strings.Join([]string{
+		"dicts.id",
+		"dicts.name",
+		"dicts.download_count",
+		"dicts.suggestion_count",
+		"dicts.sogou_id",
+		"dicts.category_id",
+		"dicts.updated_at",
+		"categories.name as category_name",
+	}, ", "), "FROM", "dicts", "LEFT JOIN categories ON categories.id = dicts.category_id")
+	count = append(count, "SELECT count(*) FROM dicts")
 
 	var wheres []string
 	if len(query) > 0 {
@@ -159,12 +178,29 @@ func getListsCountAndQuery(req *http.Request) (getQuery, countQuery string, getA
 		countArgs = append(countArgs, category)
 	}
 	if len(wheres) > 0 {
-		getQuery += "WHERE " + strings.Join(wheres, " AND ") + " "
-		countQuery += "WHERE " + strings.Join(wheres, " AND ") + " "
+		get = append(get, "WHERE", strings.Join(wheres, " AND "))
+		count = append(count, "WHERE", strings.Join(wheres, " AND "))
 	}
 
-	getQuery += "ORDER BY download_count DESC LIMIT $$ OFFSET $$"
+	var orders = []string{getListsSortBy["download"] + " DESC"}
+	if len(order) > 0 {
+		dir := " ASC"
+		if order[0] == '-' {
+			order = order[1:]
+			dir = " DESC"
+		}
+		if order == "download" {
+			orders = nil
+		}
+		if column, ok := getListsSortBy[order]; ok {
+			orders = append([]string{column + dir}, orders...)
+		}
+	}
+
+	get = append(get, "ORDER BY", strings.Join(orders, ", "), "LIMIT $$ OFFSET $$")
 	getArgs = append(getArgs, per, offset)
+
+	getQuery, countQuery = strings.Join(get, " "), strings.Join(count, " ")
 	getQuery, countQuery = replacePos(getQuery), replacePos(countQuery)
 	return
 }
