@@ -38,29 +38,10 @@ func (suggest Suggest) Serve(c *cli.Context) (err error) {
 
 	http.HandleFunc("/suggestions", func(resp http.ResponseWriter, req *http.Request) {
 		query := req.URL.Query().Get("q")
-		rets, pys, err := suggest.get(query)
+		suggestions, err := suggest.serializeGet(suggest.get(query))
 		if err != nil {
 			printErr(resp, err)
 			return
-		}
-		pinyinRegexp := pys.Regexp()
-		var suggestions []map[string]interface{}
-		for _, item := range rets {
-			start, end, pinyin := -1, -1, (*item["pinyin"]).([]byte)
-			if pos := pinyinRegexp.FindIndex(pinyin); pos != nil {
-				start = 0
-				for i := 0; i < pos[0]; i++ {
-					if pinyin[i] == '^' {
-						start++
-					}
-				}
-				end = start + len(pys)
-			}
-			suggestions = append(suggestions, map[string]interface{}{
-				"start": start,
-				"end":   end,
-				"text":  fmt.Sprintf("%s", *item["word"]),
-			})
 		}
 		printJson(resp, suggestions, suggestions == nil)
 	})
@@ -139,6 +120,13 @@ func getDictsDoneBroadcast(id, total int) {
 
 func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
 	switch msg["type"] {
+	case "get-suggestions":
+		suggestions, err := suggest.serializeGet(suggest.get(msg["value"]))
+		if err != nil {
+			printWSError(ws, err)
+			return
+		}
+		printWSJson(ws, suggestions, suggestions == nil)
 	case "get-lists":
 		if isGettingLists {
 			printWSErrorString(ws, "list getting has already been started, please wait\n")
@@ -233,6 +221,18 @@ func printErr(resp http.ResponseWriter, err error) {
 	json.NewEncoder(resp).Encode(map[string]string{
 		"error": err.Error(),
 	})
+}
+
+func printWSJson(ws *websocket.Conn, content interface{}, isNil bool) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	if isNil {
+		ws.WriteMessage(websocket.TextMessage, []byte{'[', ']'})
+		return
+	}
+	if err := ws.WriteJSON(content); err != nil {
+		printWSError(ws, err)
+	}
 }
 
 func printWSErrorString(ws *websocket.Conn, err string) {

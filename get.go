@@ -43,6 +43,31 @@ func (suggest Suggest) get(pinyin string) (rets []map[string]*interface{}, pys g
 	return
 }
 
+func (suggest Suggest) serializeGet(rets []map[string]*interface{}, pys gopinyin.Pinyins, _err error) (suggestions []map[string]interface{}, err error) {
+	if err = _err; err != nil {
+		return
+	}
+	pinyinRegexp := pys.Regexp()
+	for _, item := range rets {
+		start, end, pinyin := -1, -1, (*item["pinyin"]).([]byte)
+		if pos := pinyinRegexp.FindIndex(pinyin); pos != nil {
+			start = 0
+			for i := 0; i < pos[0]; i++ {
+				if pinyin[i] == '^' {
+					start++
+				}
+			}
+			end = start + len(pys)
+		}
+		suggestions = append(suggestions, map[string]interface{}{
+			"start": start,
+			"end":   end,
+			"text":  fmt.Sprintf("%s", *item["word"]),
+		})
+	}
+	return
+}
+
 func (suggest Suggest) Get(pinyin string) (err error) {
 	var rets []map[string]*interface{}
 

@@ -67,17 +67,26 @@
           <a href="/lists">Lists</a>
         </div>
         <input type="text" class="form-control" placeholder="Search for..." id="search">
+        <hr>
+        <div class="btn-toolbar">
+          <div class="btn-group form-control-static">
+            <strong>Using:</strong>
+          </div>
+          <div class="btn-group">
+            <button type="button" class="btn btn-default" data-using="http">HTTP</button>
+            <button type="button" class="btn btn-default" data-using="ws">WebSocket</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    $.getJSON('/approximate_suggestion_count').then(function (count) {
-      $('#total').html(count.approximate_suggestion_count.toLocaleString());
-    });
-    $('#search').typeahead(null, {
-      limit: 20,
-      source: new Bloodhound({
+    (function () {
+      var getWS;
+      var current = {};
+
+      var sourceHTTP = new Bloodhound({
         datumTokenizer: Bloodhound.tokenizers.whitespace,
         queryTokenizer: Bloodhound.tokenizers.whitespace,
         remote: {
@@ -85,20 +94,115 @@
           wildcard: '_QUERY_',
           rateLimitWait: 0
         }
-      }),
-      display: 'text',
-      templates: {
-        suggestion: function (sugg) {
-          var text = sugg.text;
-          if (sugg.start > -1) {
-            text = text.slice(0, sugg.start) +
-              '<span class="hl">' + text.slice(sugg.start, sugg.end) + '</span>' +
-              text.slice(sugg.end);
+      });
+
+      var sourceWS = new Bloodhound({
+        datumTokenizer: Bloodhound.tokenizers.whitespace,
+        queryTokenizer: Bloodhound.tokenizers.whitespace,
+        remote: {
+          url: '_QUERY_',
+          wildcard: '_QUERY_',
+          transport: function (obj, success, error) {
+            if (!getWS) return;
+            getWS.send(JSON.stringify({ type: 'get-suggestions', value: obj.url }));
+            getWS.onmessage = function (evt) {
+              var resp = JSON.parse(evt.data);
+              if (resp.error) {
+                error(resp);
+                return;
+              }
+              success(resp);
+            };
+          },
+          rateLimitWait: 0
+        }
+      });
+
+      function setCurrent () {
+        var a = window.location.search.substr(1).split('&');
+        var qs = {};
+        for (var i = 0; i < a.length; i++) {
+          var p = a[i].split('=');
+          if (p.length !== 2) continue;
+          qs[p[0]] = decodeURIComponent(p[1].replace(/\+/g, " "));
+        }
+        current.using = qs.using || undefined;
+        for (var key in current) {
+          if (!current[key]) delete current[key];
+        }
+        var using = current.using;
+        if (using !== 'ws') using = 'http';
+        $('[data-using="' + using + '"]').addClass('active');
+      }
+
+      function getSuggestionCount () {
+        $.getJSON('/approximate_suggestion_count').then(function (count) {
+          $('#total').html(count.approximate_suggestion_count.toLocaleString());
+        });
+      }
+
+      function setupWebSocket () {
+        getWS = new WebSocket('ws://' + window.location.host + '/get');
+        getWS.onopen = function (evt) {};
+        getWS.onclose = function (evt) {
+          getWS = null;
+        };
+        getWS.onerror = function (evt) {};
+      }
+
+      function setupControls () {
+        $(document).on('click', '[data-using]', function () {
+          $('[data-using]').not(this).removeClass('active');
+          $(this).addClass('active');
+          $('#search').typeahead('destroy');
+          current.using = $(this).data('using');
+          setupTypeAhead();
+        });
+      }
+
+      function setupTypeAhead () {
+        var source;
+        if (current.using === 'ws') {
+          source = sourceWS;
+        } else {
+          source = sourceHTTP;
+        }
+        $('#search').typeahead(null, {
+          limit: 20,
+          source: source,
+          display: 'text',
+          templates: {
+            suggestion: function (sugg) {
+              var text = sugg.text;
+              if (sugg.start > -1) {
+                text = text.slice(0, sugg.start) +
+                  '<span class="hl">' + text.slice(sugg.start, sugg.end) + '</span>' +
+                  text.slice(sugg.end);
+              }
+              return '<div>' + text + '</div>';
+            }
           }
-          return '<div>' + text + '</div>';
+        });
+
+        var c = $.extend(true, {}, current);
+        if (c.using === 'http') delete c.using;
+        var qs = $.param(c);
+        if (qs) qs = '?' + qs;
+        if (window.location.search !== qs) {
+          window.history.pushState({}, '', window.location.pathname + qs);
         }
       }
-    });
+
+      function main () {
+        setCurrent();
+        getSuggestionCount();
+        setupWebSocket();
+        setupControls();
+        setupTypeAhead();
+      }
+
+      main();
+    })();
   </script>
 </body>
 
