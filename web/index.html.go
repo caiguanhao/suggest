@@ -33,6 +33,7 @@ const web_index_html = `<!doctype html>
     background-clip: padding-box;
     width: 100%;
   }
+  span.twitter-typeahead .tt-item,
   span.twitter-typeahead .tt-suggestion {
     display: block;
     padding: 3px 20px;
@@ -56,6 +57,11 @@ const web_index_html = `<!doctype html>
   .hl {
     color: #cb1c00;
   }
+  span.twitter-typeahead .tt-suggestion.tt-cursor .hl,
+  span.twitter-typeahead .tt-suggestion:hover .hl,
+  span.twitter-typeahead .tt-suggestion:focus .hl {
+    color: #ffffff;
+  }
 </style>
 </head>
 
@@ -75,8 +81,8 @@ const web_index_html = `<!doctype html>
             <strong>Using:</strong>
           </div>
           <div class="btn-group">
-            <button type="button" class="btn btn-default" data-using="http">HTTP</button>
             <button type="button" class="btn btn-default" data-using="ws">WebSocket</button>
+            <button type="button" class="btn btn-default" data-using="http">HTTP</button>
           </div>
         </div>
       </div>
@@ -87,6 +93,7 @@ const web_index_html = `<!doctype html>
     (function () {
       var getWS;
       var current = {};
+      var msWaited = 0;
 
       var sourceHTTP = new Bloodhound({
         datumTokenizer: Bloodhound.tokenizers.whitespace,
@@ -94,7 +101,13 @@ const web_index_html = `<!doctype html>
         remote: {
           url: '/suggestions?q=_QUERY_',
           wildcard: '_QUERY_',
-          rateLimitWait: 0
+          rateLimitWait: 0,
+          transport: function (settings, success, error) {
+            var startTime = +new Date();
+            $.ajax(settings).fail(error).done(success).always(function () {
+              msWaited = +new Date() - startTime;
+            });
+          }
         }
       });
 
@@ -104,10 +117,12 @@ const web_index_html = `<!doctype html>
         remote: {
           url: '_QUERY_',
           wildcard: '_QUERY_',
-          transport: function (obj, success, error) {
+          transport: function (settings, success, error) {
             if (!getWS) return;
-            getWS.send(JSON.stringify({ type: 'get-suggestions', value: obj.url }));
+            var startTime = +new Date();
+            getWS.send(JSON.stringify({ type: 'get-suggestions', value: settings.url }));
             getWS.onmessage = function (evt) {
+              msWaited = +new Date() - startTime;
               var resp = JSON.parse(evt.data);
               if (resp.error) {
                 error(resp);
@@ -133,7 +148,8 @@ const web_index_html = `<!doctype html>
           if (!current[key]) delete current[key];
         }
         var using = current.using;
-        if (using !== 'ws') using = 'http';
+        if (using !== 'http') using = 'ws';
+        $('[data-using]').removeClass('active');
         $('[data-using="' + using + '"]').addClass('active');
       }
 
@@ -160,14 +176,17 @@ const web_index_html = `<!doctype html>
           current.using = $(this).data('using');
           setupTypeAhead();
         });
+        $(window).on('popstate', function (event) {
+          setCurrent();
+        });
       }
 
       function setupTypeAhead () {
         var source;
-        if (current.using === 'ws') {
-          source = sourceWS;
-        } else {
+        if (current.using === 'http') {
           source = sourceHTTP;
+        } else {
+          source = sourceWS;
         }
         $('#search').typeahead(null, {
           limit: 20,
@@ -182,12 +201,26 @@ const web_index_html = `<!doctype html>
                   text.slice(sugg.end);
               }
               return '<div>' + text + '</div>';
+            },
+            notFound: function () {
+              return '<div class="tt-item">Sorry, no suggestion for you.</div>';
+            },
+            footer: function () {
+              var footer = '<div class="tt-item"><small class="text-muted">';
+              if (msWaited > 0) {
+                footer += 'Search took ' + msWaited + ' ms.';
+                msWaited = 0;
+              } else {
+                footer += 'Cached results shown.';
+              }
+              footer += '</small></div>';
+              return footer;
             }
           }
         });
 
         var c = $.extend(true, {}, current);
-        if (c.using === 'http') delete c.using;
+        if (c.using === 'ws') delete c.using;
         var qs = $.param(c);
         if (qs) qs = '?' + qs;
         if (window.location.search !== qs) {
