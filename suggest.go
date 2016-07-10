@@ -121,12 +121,12 @@ func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []map[s
 		return
 	}
 	defer rows.Close()
+	var cols []string
+	cols, err = rows.Columns()
+	if err != nil {
+		return
+	}
 	for rows.Next() {
-		var cols []string
-		cols, err = rows.Columns()
-		if err != nil {
-			return
-		}
 		var ret = map[string]*interface{}{}
 		var dest []interface{}
 		for _, col := range cols {
@@ -135,11 +135,14 @@ func (suggest Suggest) Query(sqlQuery string, args ...interface{}) (rets []map[s
 			dest = append(dest, &data)
 		}
 		if err = rows.Scan(dest...); err != nil {
+			rets = nil
 			return
 		}
 		rets = append(rets, ret)
 	}
-	err = rows.Err()
+	if err = rows.Err(); err != nil {
+		rets = nil
+	}
 	return
 }
 
@@ -156,12 +159,12 @@ func (suggest Suggest) QueryOne(sqlQuery string, args ...interface{}) (ret map[s
 		return
 	}
 	defer rows.Close()
-	rows.Next()
 	var cols []string
 	cols, err = rows.Columns()
 	if err != nil {
 		return
 	}
+	rows.Next()
 	ret = make(map[string]*interface{})
 	var dest []interface{}
 	for _, col := range cols {
