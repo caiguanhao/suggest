@@ -186,10 +186,12 @@ func (suggest Suggest) GetHandler() func(resp http.ResponseWriter, req *http.Req
 			go suggest.execute(ws, msg)
 		}
 		ws.Close()
+		mutex.Lock()
 		if _, ok := clients[ws]; ok {
 			delete(clients, ws)
 			fmt.Println("deleted client:", ws.RemoteAddr().String(), "total clients:", len(clients))
 		}
+		mutex.Unlock()
 	}
 }
 
