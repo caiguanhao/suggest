@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -14,51 +15,65 @@ import (
 )
 
 // Get dictionary links of all pages of each category.
-func (suggest Suggest) GetLists(out func(format string, a ...interface{}), progress func(done, total int)) (err error) {
+func (suggest Suggest) GetLists(out func(format string, a ...interface{}), progress func(done, total int)) <-chan error {
 	if out == nil {
 		out = func(format string, a ...interface{}) {}
 	}
 	if progress == nil {
 		progress = func(done, total int) {}
 	}
+	errc := make(chan error)
+	go suggest.getLists(out, progress, errc)
+	return errc
+}
 
-	var doc *goquery.Document
+func (suggest Suggest) getLists(out func(format string, a ...interface{}), progress func(done, total int), errc chan<- error) {
+	defer close(errc)
+
+	var mutex sync.Mutex
 
 	done, total := 0, 0
-	progress(done, total)
+	go progress(done, total)
 
-	doc, err = goquery.NewDocument("http://pinyin.sogou.com/dict/")
+	doc, err := goquery.NewDocument("http://pinyin.sogou.com/dict/")
 	if err != nil {
+		errc <- err
 		return
 	}
 
 	titles := doc.Find(".dict_category_list_title")
 	total += titles.Length()
-	progress(done, total)
+	go progress(done, total)
 	regexCategoryUrl := regexp.MustCompile("/dict/cate/index/([0-9]+)")
-	err = suggest.BulkInsert(nil, func(stmt *sql.Stmt) (err error) {
+	if err := suggest.BulkInsert(nil, func(stmt *sql.Stmt) (err error) {
 		titles.Each(func(_ int, s *goquery.Selection) {
 			a := s.Find("a")
 			name := a.Text()
 			href := a.AttrOr("href", "")
 			matches := regexCategoryUrl.FindStringSubmatch(href)
 			if len(matches) > 1 {
-				_, err = stmt.Exec(matches[1], name)
+				_, err := stmt.Exec(matches[1], name)
+				if err != nil && !isDupError(err) {
+					errc <- err
+					return
+				}
 			}
+			mutex.Lock()
 			done += 1
-			progress(done, total)
+			go progress(done, total)
+			mutex.Unlock()
 		})
 		return
-	}, "categories", "sogou_category_id", "name")
-	if err != nil {
+	}, "categories", "sogou_category_id", "name"); err != nil {
+		errc <- err
 		return
 	}
 
 	out("list of all categories saved\n")
 
-	var rets []map[string]*interface{}
-	rets, err = suggest.Query("SELECT id, sogou_category_id, name FROM categories")
+	rets, err := suggest.Query("SELECT id, sogou_category_id, name FROM categories")
 	if err != nil {
+		errc <- err
 		return
 	}
 
@@ -73,20 +88,23 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{}), progr
 		sogouCategoryID := *data["sogou_category_id"]
 		categoryName := *data["name"]
 
-		doc, err = goquery.NewDocument(fmt.Sprintf("http://pinyin.sogou.com/dict/cate/index/%d/download", sogouCategoryID))
+		doc, err := goquery.NewDocument(fmt.Sprintf("http://pinyin.sogou.com/dict/cate/index/%d/download", sogouCategoryID))
 		if err != nil {
+			errc <- err
 			return
 		}
 		doc.Find("#dict_page_list a").Last().Remove()
-		var totalPages int
-		totalPages, err = strconv.Atoi(doc.Find("#dict_page_list a").Last().Text())
+		totalPages, err := strconv.Atoi(doc.Find("#dict_page_list a").Last().Text())
 		if err != nil {
+			errc <- err
 			return
 		}
 
 		out("found %d pages of %s\n", totalPages, categoryName)
+		mutex.Lock()
 		total += totalPages
-		progress(done, total)
+		go progress(done, total)
+		mutex.Unlock()
 
 		var urls []interface{}
 		for i := 1; i <= totalPages; i++ {
@@ -94,15 +112,17 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{}), progr
 		}
 
 		regexDetailsUrl := regexp.MustCompile("/dict/detail/index/([0-9]+)")
-		err = suggest.BulkInsert(nil, func(stmt *sql.Stmt) (err error) {
+		if err := suggest.BulkInsert(nil, func(stmt *sql.Stmt) (err error) {
 			gotogether.Enumerable(urls).Queue(func(item interface{}) {
-				var doc *goquery.Document
-				doc, err = goquery.NewDocument(item.(string))
+				doc, err := goquery.NewDocument(item.(string))
 				if err != nil {
+					errc <- err
 					return
 				}
+				mutex.Lock()
 				done += 1
-				progress(done, total)
+				go progress(done, total)
+				mutex.Unlock()
 				doc.Find("#dict_detail_list .dict_detail_block").Each(func(_ int, s *goquery.Selection) {
 					link := s.Find(".detail_title a")
 					href := link.AttrOr("href", "")
@@ -116,11 +136,18 @@ func (suggest Suggest) GetLists(out func(format string, a ...interface{}), progr
 					downloadCount := content.Eq(1).Text()
 					loc, _ := time.LoadLocation("Asia/Shanghai")
 					updatedAt, _ := time.ParseInLocation("2006-01-02 15:04:05", content.Eq(2).Text(), loc)
-					_, err = stmt.Exec(matches[1], categoryID, name, downloadCount, examples, updatedAt.UTC())
+					_, err := stmt.Exec(matches[1], categoryID, name, downloadCount, examples, updatedAt.UTC())
+					if err != nil && !isDupError(err) {
+						errc <- err
+						return
+					}
 				})
 			}).WithConcurrency(5).Run()
 			return
-		}, "dicts", "sogou_id", "category_id", "name", "download_count", "examples", "updated_at")
+		}, "dicts", "sogou_id", "category_id", "name", "download_count", "examples", "updated_at"); err != nil {
+			errc <- err
+			return
+		}
 
 		out("info of all dicts in %s saved\n", categoryName)
 	}).WithConcurrency(5).Run()

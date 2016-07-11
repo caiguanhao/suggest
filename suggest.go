@@ -11,6 +11,13 @@ type Suggest struct {
 	DataSource string
 }
 
+func isDupError(err error) bool {
+	if err != nil && strings.Contains(err.Error(), "duplicate key value") {
+		return true
+	}
+	return false
+}
+
 // Prepare a buck insertion for lots of data. If check returns false, then bulk insertion won't be executed.
 func (suggest Suggest) BulkInsert(check func(_ *sql.DB) bool, bulk func(_ *sql.Stmt) error, table string, columns ...string) (err error) {
 	var db *sql.DB
@@ -21,7 +28,7 @@ func (suggest Suggest) BulkInsert(check func(_ *sql.DB) bool, bulk func(_ *sql.S
 	defer db.Close()
 
 	defer func() {
-		if err != nil && strings.Contains(err.Error(), "duplicate key value") {
+		if isDupError(err) {
 			err = nil
 		}
 	}()

@@ -133,7 +133,9 @@ func (suggest Suggest) execute(ws *websocket.Conn, msg map[string]string) {
 			return
 		}
 		isGettingLists = true
-		suggest.GetLists(getListsBroadcast, getListsProgress)
+		for err := range suggest.GetLists(getListsBroadcast, getListsProgress) {
+			printWSError(ws, err)
+		}
 		isGettingLists = false
 	case "get-dicts":
 		id, err := strconv.Atoi(msg["value"])

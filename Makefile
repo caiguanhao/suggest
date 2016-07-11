@@ -11,7 +11,7 @@ serve: suggest
 	./suggest/suggest serve --local
 
 ./suggest/suggest: $(GOFILES) $(WEBGO)
-	go build -o $@ ./suggest
+	go build -race -o $@ ./suggest
 
 $(WEBGO): $(HTMLGOFILES)
 	(echo "package web" && \
