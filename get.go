@@ -1,13 +1,10 @@
 package suggest
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 
 	"github.com/caiguanhao/gopinyin"
-	"github.com/caiguanhao/gotogether"
-	"github.com/caiguanhao/searchresults"
 )
 
 func query(pys gopinyin.Pinyins, abbr string) (stmt string, args []interface{}) {
@@ -76,38 +73,8 @@ func (suggest Suggest) Get(pinyin string) (err error) {
 		return
 	}
 
-	var noCount []interface{}
-	for _, ret := range rets {
-		if (*ret["sogou_count"]).(int64) > 0 {
-			continue
-		}
-		noCount = append(noCount, ret)
-	}
-
-	if len(noCount) > 0 {
-		err = suggest.BulkExec("UPDATE suggestions SET sogou_count = $1 WHERE ID = $2", func(stmt *sql.Stmt) (err error) {
-			gotogether.Enumerable(noCount).Queue(func(item interface{}) {
-				suggestion := item.(map[string]*interface{})
-				id := *suggestion["id"]
-				word := fmt.Sprintf("%s", *suggestion["word"])
-				count, _ := searchresults.GetSogouCount(word)
-				_, err = stmt.Exec(count, id)
-			}).WithConcurrency(5).Run()
-			return
-		})
-		if err != nil {
-			return
-		}
-
-		rets, _, err = suggest.get(pinyin)
-		if err != nil {
-			return
-		}
-
-	}
-
 	for _, item := range rets {
-		fmt.Printf("%s - %d\n", *item["word"], *item["sogou_count"])
+		fmt.Printf("%s\n", *item["word"])
 	}
 	return
 }
