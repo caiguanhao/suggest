@@ -88,30 +88,23 @@ func (suggest Suggest) GetDict(ID int, out func(id int, format string, a ...inte
 
 	out(ID, "[importing] found %d items in dict %d\n", total, ID)
 
-	err = suggest.BulkInsert(func(db *sql.DB) bool {
-		var count int64
-		db.QueryRow("SELECT count(*) FROM suggestions WHERE sogou_id = $1", ID).Scan(&count)
-		if count > 0 {
-			out(ID, "[imported] %d already added\n", ID)
-			return false
-		}
-		return true
-	}, func(stmt *sql.Stmt) (err error) {
-		last := time.Now()
-		for i, item := range dict.Items {
-			_, err = stmt.Exec(join(item.Pinyin), strings.Join(item.Abbr, ""), item.Text, len(item.Pinyin), ID)
-			if err != nil {
-				return
+	err = suggest.BulkExec("INSERT INTO suggestions (pinyin, abbr, word, length, sogou_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (word) DO NOTHING",
+		func(stmt *sql.Stmt) (err error) {
+			last := time.Now()
+			for i, item := range dict.Items {
+				_, err = stmt.Exec(join(item.Pinyin), strings.Join(item.Abbr, ""), item.Text, len(item.Pinyin), ID)
+				if err != nil {
+					return
+				}
+				now := time.Now()
+				timediff := float64(now.Sub(last).Nanoseconds()) / 1e9
+				if timediff > 0.1 {
+					progress(ID, i+1, total)
+					last = now
+				}
 			}
-			now := time.Now()
-			timediff := float64(now.Sub(last).Nanoseconds()) / 1e9
-			if timediff > 0.5 {
-				progress(ID, i+1, total)
-				last = now
-			}
-		}
-		return
-	}, "suggestions", "pinyin", "abbr", "word", "length", "sogou_id")
+			return
+		})
 
 	if err == nil {
 		out(ID, "[imported] %d items added to database\n", total)
@@ -127,6 +120,16 @@ func (suggest Suggest) GetDict(ID int, out func(id int, format string, a ...inte
 			return
 		},
 	)
+
+	if err != nil {
+		return
+	}
+
+	var c map[string]*interface{}
+	c, err = suggest.QueryOne("SELECT suggestion_count FROM dicts WHERE sogou_id = $1", ID)
+	if err == nil && c != nil {
+		total = int((*c["suggestion_count"]).(int64))
+	}
 
 	return
 }

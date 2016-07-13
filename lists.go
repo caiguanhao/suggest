@@ -45,7 +45,7 @@ func (suggest Suggest) getLists(out func(format string, a ...interface{}), progr
 	total += titles.Length()
 	go progress(done, total)
 	regexCategoryUrl := regexp.MustCompile("/dict/cate/index/([0-9]+)")
-	if err := suggest.BulkInsert(nil, func(stmt *sql.Stmt) (err error) {
+	if err := suggest.Copy(nil, func(stmt *sql.Stmt) (err error) {
 		titles.Each(func(_ int, s *goquery.Selection) {
 			a := s.Find("a")
 			name := a.Text()
@@ -112,7 +112,7 @@ func (suggest Suggest) getLists(out func(format string, a ...interface{}), progr
 		}
 
 		regexDetailsUrl := regexp.MustCompile("/dict/detail/index/([0-9]+)")
-		if err := suggest.BulkInsert(nil, func(stmt *sql.Stmt) (err error) {
+		if err := suggest.Copy(nil, func(stmt *sql.Stmt) (err error) {
 			gotogether.Enumerable(urls).Queue(func(item interface{}) {
 				doc, err := goquery.NewDocument(item.(string))
 				if err != nil {

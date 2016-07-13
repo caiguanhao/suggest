@@ -19,7 +19,7 @@ func isDupError(err error) bool {
 }
 
 // Prepare a buck insertion for lots of data. If check returns false, then bulk insertion won't be executed.
-func (suggest Suggest) BulkInsert(check func(_ *sql.DB) bool, bulk func(_ *sql.Stmt) error, table string, columns ...string) (err error) {
+func (suggest Suggest) Copy(check func(_ *sql.DB) bool, bulk func(_ *sql.Stmt) error, table string, columns ...string) (err error) {
 	var db *sql.DB
 	db, err = sql.Open("postgres", suggest.DataSource)
 	if err != nil {
