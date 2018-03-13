@@ -47,7 +47,7 @@ func (suggest Suggest) GetDict(ID int, out func(id int, format string, a ...inte
 	}
 
 	var req *http.Request
-	url := fmt.Sprintf("http://download.pinyin.sogou.com/dict/download_cell.php?id=%d&name=", ID)
+	url := fmt.Sprintf("https://pinyin.sogou.com/d/dict/download_cell.php?id=%d&name=dict", ID)
 
 	out(ID, "[downloading] downloading dict %d from %s\n", ID, url)
 	progress(ID, 0, 0)
